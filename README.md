@@ -50,6 +50,11 @@ You then want to plug the color output to a *Separate RGB* node, to get stretch 
 Please report any bugs or suggestions in the appropriated tab on the [github page](https://github.com/ScottishCyclops/tensionmap).
 
 
+## TODO
+
+Support for shape key deformation
+
+
 ## Conclusion
 
 I hope you'll find this add-on useful!
