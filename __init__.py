@@ -1,4 +1,4 @@
-#    Tension Map Script is a Blender add-on
+#    Tension Map Script is a Blender add-on that adds stretch information to desired meshes
 #    Copyright (C) 2017 Scott Winkelmann
 #    Copyright (C) 2014 Jean-Francois Gallant
 #
@@ -25,8 +25,8 @@ bl_info = {
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
     "warning":     "",
-    "wiki_url":    "http://pyroevil.com/",
-    "tracker_url": "",
+    "wiki_url":    "https://github.com/ScottishCyclops/tensionmap",
+    "tracker_url": "https://github.com/ScottishCyclops/tensionmap/issues",
     "category":    "Object"
 }
 
@@ -68,7 +68,7 @@ def tm_update(obj, scene):
     """
     Updates the tension map for the given object
     :param obj: the object to update
-    :param scene: the scene in which it resides
+    :param scene: the scene in which the object resides
     :return: nothing
     """
 
