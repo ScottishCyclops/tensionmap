@@ -13,7 +13,9 @@ I do not know if PyroEvil is planning on continuing development of this add-on, 
 
 ## Installation
 
-On the [github page](https://github.com/ScottishCyclops/tensionmap), click the button that says *Clone or download*, then *Download ZIP*.
+Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose *Source code (zip)*.
+
+> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*.
 
 Once downloaded, **Do not extract the ZIP file**.
 
