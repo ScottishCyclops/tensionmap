@@ -122,16 +122,16 @@ def tm_update(obj, scene):
     bpy.data.meshes.remove(deformed_mesh)
 
     # put the new values in the vertex groups
-    # if the weight value is positive, it is stretched
-    # otherwise, it is squeezed
     for i in range(len(obj.data.vertices)):
         if weights[i] >= 0:
-            obj.vertex_groups[index_stretch].add([i], weights[i], "REPLACE")
-            obj.vertex_groups[index_squeeze].add([i], 0.0, "REPLACE")
-        else:
-            # invert weights to keep positive values
+            # positive: squeezed
             obj.vertex_groups[index_stretch].add([i], 0.0, "REPLACE")
-            obj.vertex_groups[index_squeeze].add([i], -weights[i], "REPLACE")
+            obj.vertex_groups[index_squeeze].add([i], weights[i], "REPLACE")
+        else:
+            # negative: stretched
+            # invert weights to keep only positive values
+            obj.vertex_groups[index_stretch].add([i], -weights[i], "REPLACE")
+            obj.vertex_groups[index_squeeze].add([i], 0.0, "REPLACE")
 
     # put the new values from the vertex groups in the vertex colors
     # red channel is stretched
