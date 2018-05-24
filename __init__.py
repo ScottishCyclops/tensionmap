@@ -1,5 +1,5 @@
 #    Tension Map Script is a Blender add-on that adds stretch information to desired meshes
-#    Copyright (C) 2017 Scott Winkelmann
+#    Copyright (C) 2018 Scott Winkelmann
 #    Copyright (C) 2014 Jean-Francois Gallant
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (1, 0, 1),
-    "blender":     (2, 78, 0),
+    "version":     (1, 0, 2),
+    "blender":     (2, 79, 4),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
     "warning":     "",
@@ -31,7 +31,8 @@ bl_info = {
 }
 
 last_processed_frame = None
-accepted_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK", "LAPLACIANSMOOTH", "LAPLACIANDEFORM",
+# list of modifiers that we will keep to compute the deformation
+kept_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK", "LAPLACIANSMOOTH", "LAPLACIANDEFORM",
                       "LATTICE", "MESH_DEFORM", "SHRINKWRAP", "SIMPLE_DEFORM", "SMOOTH", "WARP", "WAVE", "CLOTH",
                       "SOFT_BODY"]
 
@@ -72,73 +73,80 @@ def tm_update(obj, scene):
     :return: nothing
     """
 
-    if obj.type == "MESH":
-        if obj.data.tm_active:
-            global accepted_modifiers
+    if obj.type != "MESH": return
 
-            # check vertex groups and vertex colors existence, add them otherwise
-            index_squeeze = get_or_create_vertex_group(obj, "tm_stretch")
-            index_stretch = get_or_create_vertex_group(obj, "tm_squeeze")
-            index_tension = get_or_create_vertex_colors(obj, "tm_tension")
+    if not obj.data.tm_active: return
 
-            # save modifier viewport show state
-            # temporarily hide modifiers to copy mesh data
-            show_original_state = [False] * len(obj.modifiers)
-            for i in range(len(obj.modifiers)):
-                show_original_state[i] = obj.modifiers[i].show_viewport
+    global kept_modifiers
 
-                # TODO: clear the next statement out
-                if obj.modifiers[i].type not in accepted_modifiers:
-                    obj.modifiers[i].show_viewport = False
+    # check vertex groups and vertex colors existence, add them otherwise
+    index_squeeze = get_or_create_vertex_group(obj, "tm_stretch")
+    index_stretch = get_or_create_vertex_group(obj, "tm_squeeze")
+    index_tension = get_or_create_vertex_colors(obj, "tm_tension")
 
-            mesh = obj.to_mesh(scene=scene, apply_modifiers=True, settings="PREVIEW")
+    # save modifier viewport show state
+    # temporarily hide modifiers to create a deformed mesh data
+    show_original_state = [False] * len(obj.modifiers)
+    for i in range(len(obj.modifiers)):
+        show_original_state[i] = obj.modifiers[i].show_viewport
 
-            # restore modifiers viewport show state
-            for i in range(len(obj.modifiers)):
-                obj.modifiers[i].show_viewport = show_original_state[i]
+        # if the modifier is not one we keep for the deformed mesh, hide it for now
+        if obj.modifiers[i].type not in kept_modifiers:
+            obj.modifiers[i].show_viewport = False
 
-            # array to store new weight for each vertices
-            weights = [0.0] * len(obj.data.vertices)
+    deformed_mesh = obj.to_mesh(scene=scene, apply_modifiers=True, settings="PREVIEW")
 
-            # calculating the new weights
-            for edge in obj.data.edges:
-                first_vertex = edge.vertices[0]
-                second_vertex = edge.vertices[1]
+    # restore modifiers viewport show state
+    for i in range(len(obj.modifiers)):
+        obj.modifiers[i].show_viewport = show_original_state[i]
 
-                deformed_edge_length = (obj.data.vertices[first_vertex].co - obj.data.vertices[second_vertex].co).length
-                original_edge_length = (mesh.vertices[first_vertex].co - mesh.vertices[second_vertex].co).length
+    # array to store new weight for each vertices
+    weights = [0.0] * len(obj.data.vertices)
 
-                factor = (deformed_edge_length - original_edge_length) * obj.data.tm_multiply
-                weights[first_vertex] -= factor
-                weights[second_vertex] -= factor
+    # calculate the new weights
+    for edge in obj.data.edges:
+        first_vertex = edge.vertices[0]
+        second_vertex = edge.vertices[1]
 
-            # delete the temporary non-deformed mesh
-            bpy.data.meshes.remove(mesh)
+        original_edge_length = (obj.data.vertices[first_vertex].co - obj.data.vertices[second_vertex].co).length
+        deformed_edge_length = (deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
-            # we put the new values in the vertex groups
-            # if the weight value is positive, it is stretched
-            # otherwise, it is squeezed
-            for i in range(len(obj.data.vertices)):
-                if weights[i] >= 0:
-                    obj.vertex_groups[index_stretch].add([i], weights[i], "REPLACE")
-                    obj.vertex_groups[index_squeeze].add([i], 0.0, "REPLACE")
-                else:
-                    obj.vertex_groups[index_stretch].add([i], 0.0, "REPLACE")
-                    obj.vertex_groups[index_squeeze].add([i], -weights[i], "REPLACE")
+        # TODO: give more option, like minimum, maximum, logarithmic, etc
+        deformation_factor = (original_edge_length - deformed_edge_length) * obj.data.tm_multiply
 
-            # we put the new values in the vertex colors
-            # red channel is stretched
-            # green channel is squeezed
-            # blue channel is not used
-            for i in range(len(obj.data.polygons)):
-                # k v -> key value
-                for k, v in enumerate(obj.data.polygons[i].loop_indices):
-                    vertex = obj.data.polygons[i].vertices[k]
-                    obj.data.vertex_colors[index_tension].data[v].color.r = \
-                        obj.vertex_groups[index_stretch].weight(vertex)
-                    obj.data.vertex_colors[index_tension].data[v].color.g = \
-                        obj.vertex_groups[index_squeeze].weight(vertex)
-                    obj.data.vertex_colors[index_tension].data[v].color.b = 0.0
+        # store the weights by subtracting to overlay all the factors for each vertex
+        weights[first_vertex] -= deformation_factor
+        weights[second_vertex] -= deformation_factor
+
+    # delete the temporary deformed mesh
+    bpy.data.meshes.remove(deformed_mesh)
+
+    # put the new values in the vertex groups
+    # if the weight value is positive, it is stretched
+    # otherwise, it is squeezed
+    for i in range(len(obj.data.vertices)):
+        if weights[i] >= 0:
+            obj.vertex_groups[index_stretch].add([i], weights[i], "REPLACE")
+            obj.vertex_groups[index_squeeze].add([i], 0.0, "REPLACE")
+        else:
+            # invert weights to keep positive values
+            obj.vertex_groups[index_stretch].add([i], 0.0, "REPLACE")
+            obj.vertex_groups[index_squeeze].add([i], -weights[i], "REPLACE")
+
+    # put the new values from the vertex groups in the vertex colors
+    # red channel is stretched
+    # green channel is squeezed
+    # blue channel is not used
+    for i in range(len(obj.data.polygons)):
+        # k v -> key value
+        for k, v in enumerate(obj.data.polygons[i].loop_indices):
+            vertex = obj.data.polygons[i].vertices[k]
+            obj.data.vertex_colors[index_tension].data[v].color.r = \
+                obj.vertex_groups[index_stretch].weight(vertex)
+            obj.data.vertex_colors[index_tension].data[v].color.g = \
+                obj.vertex_groups[index_squeeze].weight(vertex)
+            # ignoring blue for now
+            # obj.data.vertex_colors[index_tension].data[v].color.b = 0.0
 
 
 def tm_update_handler(scene):
@@ -152,10 +160,13 @@ def tm_update_handler(scene):
     global last_processed_frame
 
     # avoid executing the operations if the frame hasn't really changed
-    if last_processed_frame != scene.frame_current:
-        last_processed_frame = scene.frame_current
-        for obj in scene.objects:
-            tm_update(obj, scene)
+    if last_processed_frame == scene.frame_current: return
+
+    last_processed_frame = scene.frame_current
+
+    # TODO: store tm objects in a special array to avoid looping over all objects in the scene
+    for obj in scene.objects:
+        tm_update(obj, scene)
 
 
 def tm_update_selected(context):
@@ -168,9 +179,7 @@ def tm_update_selected(context):
 
 
 class TmUpdateSelected(bpy.types.Operator):
-    """
-    Update tension map for selected object
-    """
+    """Update tension map for selected object"""
 
     # this operator is simply a wrapper for the tm_update_selected function
     bl_label = "Update tension map"
@@ -186,9 +195,7 @@ class TmUpdateSelected(bpy.types.Operator):
 
 
 class TmPanel(bpy.types.Panel):
-    """
-    Creates a Panel in the Object properties window
-    """
+    """Creates a Panel in the Object properties window"""
 
     bl_label = "Tension Map Script"
     bl_idname = "OBJECT_PT_tm"
@@ -197,16 +204,18 @@ class TmPanel(bpy.types.Panel):
     bl_context = "data"
 
     def draw_header(self, context):
-        if context.object.type == "MESH":
-            row = self.layout.row()
-            row.prop(context.object.data, "tm_active", text="")
+        if context.object.type != "MESH": return
+
+        row = self.layout.row()
+        row.prop(context.object.data, "tm_active", text="")
 
     def draw(self, context):
-        if context.object.type == "MESH":
-            row = self.layout.row()
-            row.active = context.object.data.tm_active
-            row.prop(context.object.data, "tm_multiply", text="Multiplier")
-            row.operator("tm.update_selected")
+        if context.object.type != "MESH": return
+
+        row = self.layout.row()
+        row.active = context.object.data.tm_active
+        row.prop(context.object.data, "tm_multiply", text="Multiplier")
+        row.operator("tm.update_selected")
 
 
 def add_props():
@@ -215,9 +224,9 @@ def add_props():
     :return: nothing
     """
     bpy.types.Mesh.tm_active = \
-        bpy.props.BoolProperty(name="tm_active", description="Activate tension map", default=False)
+        bpy.props.BoolProperty(name="tm_active", description="Activate tension map on this mesh", default=False)
     bpy.types.Mesh.tm_multiply = \
-        bpy.props.FloatProperty(name="tm_multiply", description="Map intensity multiplier", min=-100, max=100,
+        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=0.0, max=1000.0,
                                 default=1.0)
 
 
@@ -253,8 +262,8 @@ def register():
     :return: nothing
     """
     add_props()
-    bpy.utils.register_class(TmPanel)
     bpy.utils.register_class(TmUpdateSelected)
+    bpy.utils.register_class(TmPanel)
     add_handlers()
 
 
