@@ -13,9 +13,9 @@ I do not know if PyroEvil is planning on continuing development of this add-on, 
 
 ## Installation
 
-Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose *Source code (zip)*.
+Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip*.
 
-> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*.
+> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*. Be aware that as noted in [#1](https://github.com/ScottishCyclops/tensionmap/issues/1), the default name of the ZIP file may not be for a blender Addon-on. You will need to rename the ZIP before continuing.
 
 Once downloaded, **Do not extract the ZIP file**.
 
@@ -28,7 +28,7 @@ You should see the add-on in the list. If not, search for *tension* in the searc
 Click on the checkbox to enable it.
 
 
-If you wish the add-on to stay enable by default, click on *Save User Settings* at the bottom of the screen before closing the preferences.
+If you wish for the add-on to be enabled by default, click on *Save User Settings* at the bottom of the screen before closing the preferences.
 
 ## Usage
 
@@ -44,7 +44,7 @@ Use the vertex groups to drive things such as modifiers, and vertex colors to dr
 
 You can access the vertex colors though the *Attribute* node, by simply witting **tm_tension** in the *Name* field.
 
-You then want to plug the color output to a *Separate RGB* node, to get stretch values from the Red channel and squeezed values from the Green channel. Note that the Blue channel is not used.
+You then want to plug the color output to a *Separate RGB* node, to get stretch values from the Red channel and squeezed values from the Green channel. Note that the Blue channel is not used (for now).
 
 
 ## Bugs and suggestions
@@ -59,6 +59,6 @@ Support for shape key deformation
 
 ## Conclusion
 
-I hope you'll find this add-on useful!
+I hope you'll find this add-on useful and I am open to suggestions (regarding this addon, or ideas for addons)!
 
 Scott
