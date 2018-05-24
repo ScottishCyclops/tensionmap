@@ -141,12 +141,12 @@ def tm_update(obj, scene):
         # k v -> key value
         for k, v in enumerate(obj.data.polygons[i].loop_indices):
             vertex = obj.data.polygons[i].vertices[k]
-            obj.data.vertex_colors[index_tension].data[v].color.r = \
+            obj.data.vertex_colors[index_tension].data[v].color[0] = \
                 obj.vertex_groups[index_stretch].weight(vertex)
-            obj.data.vertex_colors[index_tension].data[v].color.g = \
+            obj.data.vertex_colors[index_tension].data[v].color[1] = \
                 obj.vertex_groups[index_squeeze].weight(vertex)
             # ignoring blue for now
-            # obj.data.vertex_colors[index_tension].data[v].color.b = 0.0
+            # obj.data.vertex_colors[index_tension].data[v].color[2] = 0.0
 
 
 def tm_update_handler(scene):
