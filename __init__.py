@@ -21,7 +21,7 @@ bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
     "version":     (1, 0, 2),
-    "blender":     (2, 79, 4),
+    "blender":     (2, 80, 0),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
     "warning":     "",
@@ -94,7 +94,7 @@ def tm_update(obj, scene):
         if obj.modifiers[i].type not in kept_modifiers:
             obj.modifiers[i].show_viewport = False
 
-    deformed_mesh = obj.to_mesh(scene=scene, apply_modifiers=True, settings="PREVIEW")
+    deformed_mesh = obj.to_mesh(depsgraph=bpy.context.depsgraph, apply_modifiers=True)
 
     # restore modifiers viewport show state
     for i in range(len(obj.modifiers)):
