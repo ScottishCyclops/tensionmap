@@ -16,13 +16,13 @@ I do not know if PyroEvil is planning on continuing development of this add-on, 
 
 Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip* for your blender version.
 
-> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) or the [2.8 branch](https://github.com/ScottishCyclops/tensionmap/tree/2.8) on github, then click the button that says *Clone or download*, then *Download ZIP*. Be aware that as noted in [#1](https://github.com/ScottishCyclops/tensionmap/issues/1), the default name of the ZIP file may not be valid for a blender Addon-on. You will need to rename the ZIP before continuing.
+> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) or the [2.8 branch](https://github.com/ScottishCyclops/tensionmap/tree/2.8) on github, then click the button that says *Clone or download*, then *Download ZIP*.
 
-Once downloaded, **Do not extract the ZIP file**.
+Once downloaded, extract the ZIP file to find `tensionmap.py`.
 
 Open Blender, go into *Edit*, *Preferences...*, *Add-ons*, and click on *Install...* at the top of the window.
 
-Navigate to the folder you downloaded the ZIP file into, then double click on the file, or select it and click *Install Add-on from File...*
+Navigate to the folder where `tensionmap.py` is, then double click on the file, or select it and click *Install Add-on from File...*
 
 You should see the add-on in the list. If not, search for *tension* in the search box and it should pop up.
 
