@@ -6,29 +6,28 @@ This add-on has been created by Jean-Francois Gallant aka [Pyroevil](https://pyr
 
 It was released under the GPL2 or later licence.
 
-This repository contains my version of the add-on, which has been made [PEP8](https://www.python.org/dev/peps/pep-0008/) compliant, has been optimized and commented. I also fixed the errors and warning I could find.
+This repository contains my version of the add-on, which has been made [PEP8](https://www.python.org/dev/peps/pep-0008/) compliant (mostly), has been optimized and commented. I also fixed the errors and warning I could find.
+Since then, it has also been updated for Blender 2.8.
 
 I do not know if PyroEvil is planning on continuing development of this add-on, but I am.
 
 
 ## Installation
 
-Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip*.
+Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip* for your blender version.
 
-> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*. Be aware that as noted in [#1](https://github.com/ScottishCyclops/tensionmap/issues/1), the default name of the ZIP file may not be for a blender Addon-on. You will need to rename the ZIP before continuing.
+> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) or the [2.8 branch](https://github.com/ScottishCyclops/tensionmap/tree/2.8) on github, then click the button that says *Clone or download*, then *Download ZIP*. Be aware that as noted in [#1](https://github.com/ScottishCyclops/tensionmap/issues/1), the default name of the ZIP file may not be valid for a blender Addon-on. You will need to rename the ZIP before continuing.
 
 Once downloaded, **Do not extract the ZIP file**.
 
-Open Blender, go into *File*, *User Preferences*, *Add-ons*, and click on *Install from File...* at the bottom of the window.
+Open Blender, go into *Edit*, *Preferences...*, *Add-ons*, and click on *Install...* at the top of the window.
 
-Navigate to the folder you downloaded the ZIP file into, then double click on the file, or select it and click *Install from File...*
+Navigate to the folder you downloaded the ZIP file into, then double click on the file, or select it and click *Install Add-on from File...*
 
 You should see the add-on in the list. If not, search for *tension* in the search box and it should pop up.
 
 Click on the checkbox to enable it.
 
-
-If you wish for the add-on to be enabled by default, click on *Save User Settings* at the bottom of the screen before closing the preferences.
 
 ## Usage
 
@@ -44,7 +43,7 @@ Use the vertex groups to drive things such as modifiers, and vertex colors to dr
 
 You can access the vertex colors though the *Attribute* node, by simply witting **tm_tension** in the *Name* field.
 
-You then want to plug the color output to a *Separate RGB* node, to get stretch values from the Red channel and squeezed values from the Green channel. Note that the Blue channel is not used (for now).
+You then want to plug the color output to a *Separate RGB* node, to get squeezed values from the Red channel and stretch values from the Green channel. Note that the Blue channel is not used (for now).
 
 
 ## Bugs and suggestions
@@ -54,7 +53,9 @@ Please report any bugs or suggestions in the appropriated tab on the [github pag
 
 ## TODO
 
-Support for shape key deformation
+- Support for shape key deformation
+- Manually choosing which modifiers affect the computation
+- A global "disable" option to work faster
 
 
 ## Conclusion
