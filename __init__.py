@@ -1,5 +1,5 @@
 #    Tension Map Script is a Blender add-on that adds stretch information to desired meshes
-#    Copyright (C) 2018 Scott Winkelmann
+#    Copyright (C) 2019 Scott Winkelmann
 #    Copyright (C) 2014 Jean-Francois Gallant
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (1, 0, 2),
-    "blender":     (2, 79, 4),
+    "version":     (2, 0, 0),
+    "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
     "warning":     "",
@@ -32,9 +32,15 @@ bl_info = {
 
 last_processed_frame = None
 # list of modifiers that we will keep to compute the deformation
-kept_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK", "LAPLACIANSMOOTH", "LAPLACIANDEFORM",
-                      "LATTICE", "MESH_DEFORM", "SHRINKWRAP", "SIMPLE_DEFORM", "SMOOTH", "WARP", "WAVE", "CLOTH",
-                      "SOFT_BODY"]
+# TODO: update based on list in docs
+# https://docs.blender.org/api/blender2.8/bpy.types.Modifier.html#bpy.types.Modifier.type
+kept_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK",
+                  "LAPLACIANSMOOTH", "LAPLACIANDEFORM",
+                  "LATTICE", "MESH_DEFORM", "SHRINKWRAP", "SIMPLE_DEFORM",
+                  "SMOOTH", "WARP", "WAVE", "CLOTH",
+                  "SOFT_BODY"]
+
+tm_update_modes = ["OBJECT", "WEIGHT_PAINT", "VERTEX_PAINT"]
 
 
 def get_or_create_vertex_group(obj, group_name):
@@ -65,17 +71,25 @@ def get_or_create_vertex_colors(obj, colors_name):
     return obj.data.vertex_colors[colors_name].name
 
 
-def tm_update(obj, scene):
+def tm_update(obj, context):
     """
     Updates the tension map for the given object
     :param obj: the object to update
-    :param scene: the scene in which the object resides
+    :param context: the context of the operation
     :return: nothing
     """
 
-    if obj.type != "MESH": return
+    # only care about meshes
+    if obj.type != "MESH":
+        return
 
-    if not obj.data.tm_active: return
+    # only care about meshes with tensionmap activated
+    if not obj.data.tm_active:
+        return
+
+    # can't edit vertex group and so on when in other modes
+    if obj.mode not in tm_update_modes:
+        return
 
     global kept_modifiers
 
@@ -91,10 +105,17 @@ def tm_update(obj, scene):
         show_original_state[i] = obj.modifiers[i].show_viewport
 
         # if the modifier is not one we keep for the deformed mesh, hide it for now
+        # TODO: use a bool property on each modifier to determine if it should be kept
+        # it appears a property can't be added to the Modifier type
+        # another way will need to be found
         if obj.modifiers[i].type not in kept_modifiers:
             obj.modifiers[i].show_viewport = False
 
-    deformed_mesh = obj.to_mesh(scene=scene, apply_modifiers=True, settings="PREVIEW")
+    # this converts the object to a mesh
+    # as it is currently visible in the viewport
+    depsgraph = context.evaluated_depsgraph_get()
+    object_eval = obj.evaluated_get(depsgraph)
+    deformed_mesh = object_eval.to_mesh()
 
     # restore modifiers viewport show state
     for i in range(len(obj.modifiers)):
@@ -108,18 +129,21 @@ def tm_update(obj, scene):
         first_vertex = edge.vertices[0]
         second_vertex = edge.vertices[1]
 
-        original_edge_length = (obj.data.vertices[first_vertex].co - obj.data.vertices[second_vertex].co).length
-        deformed_edge_length = (deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
+        original_edge_length = (
+            obj.data.vertices[first_vertex].co - obj.data.vertices[second_vertex].co).length
+        deformed_edge_length = (
+            deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
         # TODO: give more option, like minimum, maximum, logarithmic, etc
-        deformation_factor = (original_edge_length - deformed_edge_length) * obj.data.tm_multiply
+        deformation_factor = (original_edge_length -
+                              deformed_edge_length) * obj.data.tm_multiply
 
         # store the weights by subtracting to overlay all the factors for each vertex
         weights[first_vertex] -= deformation_factor
         weights[second_vertex] -= deformation_factor
 
     # delete the temporary deformed mesh
-    bpy.data.meshes.remove(deformed_mesh)
+    object_eval.to_mesh_clear()
 
     # put the new values in the vertex groups
     for i in range(len(obj.data.vertices)):
@@ -160,13 +184,14 @@ def tm_update_handler(scene):
     global last_processed_frame
 
     # avoid executing the operations if the frame hasn't really changed
-    if last_processed_frame == scene.frame_current: return
+    if last_processed_frame == scene.frame_current:
+        return
 
     last_processed_frame = scene.frame_current
 
     # TODO: store tm objects in a special array to avoid looping over all objects in the scene
     for obj in scene.objects:
-        tm_update(obj, scene)
+        tm_update(obj, bpy.context)
 
 
 def tm_update_selected(context):
@@ -175,7 +200,7 @@ def tm_update_selected(context):
     :param context: the context in which the selected object is
     :return: nothing
     """
-    tm_update(context.object, context.scene)
+    tm_update(context.object, context)
 
 
 class TmUpdateSelected(bpy.types.Operator):
@@ -204,18 +229,38 @@ class TmPanel(bpy.types.Panel):
     bl_context = "data"
 
     def draw_header(self, context):
-        if context.object.type != "MESH": return
+        if context.object.type != "MESH":
+            return
 
         row = self.layout.row()
         row.prop(context.object.data, "tm_active", text="")
 
     def draw(self, context):
-        if context.object.type != "MESH": return
+        if context.object.type != "MESH":
+            return
 
-        row = self.layout.row()
-        row.active = context.object.data.tm_active
-        row.prop(context.object.data, "tm_multiply", text="Multiplier")
-        row.operator("tm.update_selected")
+        flow = self.layout.column()
+
+        row1 = flow.column()
+        row1.active = context.object.data.tm_active
+        row1.operator("tm.update_selected")
+        row1.prop(context.object.data, "tm_multiply", text="Multiplier")
+
+        '''
+        # TODO: finish implementing interface for choosing modifiers
+        flow.separator()
+
+        row2 = flow.column()
+        row2.enabled = context.object.data.tm_active
+        row2.label(text="Modifiers to use when computing tension")
+        list = row2.box()
+
+        modifiers = context.object.modifiers
+
+        for i in range(len(modifiers)):
+            row = list.row()
+            row.prop(modifiers[i], "use_for_tension", text=modifiers[i].name)
+        '''
 
 
 def add_props():
@@ -224,9 +269,10 @@ def add_props():
     :return: nothing
     """
     bpy.types.Mesh.tm_active = \
-        bpy.props.BoolProperty(name="tm_active", description="Activate tension map on this mesh", default=False)
+        bpy.props.BoolProperty(
+            name="tm_active", description="Activate tension map on this mesh", default=False)
     bpy.types.Mesh.tm_multiply = \
-        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=0.0, max=1000.0,
+        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=-1000.0, max=1000.0,
                                 default=1.0)
 
 
