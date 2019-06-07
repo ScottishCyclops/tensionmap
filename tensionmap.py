@@ -198,7 +198,7 @@ def tm_update_handler(scene):
         tm_update(obj, bpy.context)
 
 
-def tm_update_selected(context):
+def tm_update_selected(self, context):
     """
     Updates the tension map for the selected object
     :param context: the context in which the selected object is
@@ -216,7 +216,7 @@ class TmUpdateSelected(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        tm_update_selected(context)
+        tm_update_selected(self, context)
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -275,20 +275,37 @@ def add_props():
     Method responsible for adding properties to the mesh type
     :return: nothing
     """
-    bpy.types.Mesh.tm_active = \
-        bpy.props.BoolProperty(
-            name="tm_active", description="Activate tension map on this mesh", default=False)
-    bpy.types.Mesh.tm_multiply = \
-        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=0.0, max=9999.0,
-                                default=1.0)
-    bpy.types.Mesh.tm_minimum = \
-        bpy.props.FloatProperty(name="tm_minimum", description="Tension map minimum value", min=0.0, max=9999.0,
-                                default=0.0)
-    bpy.types.Mesh.tm_maximum = \
-        bpy.props.FloatProperty(name="tm_maximum", description="Tension map maximum value", min=0.0, max=9999.0,
-                                default=9999.0)
-    bpy.types.Mesh.tm_enable_vertex_colors = \
-        bpy.props.BoolProperty(name="tm_enable_vertex_colors", description="Whether to enable vertex colors (takes longer to process each frame)", default=False)
+    bpy.types.Mesh.tm_active = bpy.props.BoolProperty(
+            name="tm_active",
+            description="Activate tension map on this mesh",
+            default=False,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_multiply = bpy.props.FloatProperty(
+            name="tm_multiply",
+            description="Tension map intensity multiplier",
+            min=0.0,
+            max=9999.0,
+            default=1.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_minimum = bpy.props.FloatProperty(
+            name="tm_minimum",
+            description="Tension map minimum value",
+            min=0.0,
+            max=9999.0,
+            default=0.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_maximum = bpy.props.FloatProperty(
+            name="tm_maximum",
+            description="Tension map maximum value",
+            min=0.0,
+            max=9999.0,
+            default=9999.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_enable_vertex_colors = bpy.props.BoolProperty(
+            name="tm_enable_vertex_colors",
+            description="Whether to enable vertex colors (takes longer to process each frame)",
+            default=False,
+            update=tm_update_selected)
 
 
 def remove_props():
