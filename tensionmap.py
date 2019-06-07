@@ -20,7 +20,7 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (2, 0, 0),
+    "version":     (2, 1, 0),
     "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
