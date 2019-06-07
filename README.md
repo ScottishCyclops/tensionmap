@@ -7,7 +7,7 @@ This add-on has been created by Jean-Francois Gallant aka [Pyroevil](https://pyr
 It was released under the GPL2 or later licence.
 
 This repository contains my version of the add-on, which has been made [PEP8](https://www.python.org/dev/peps/pep-0008/) compliant (mostly), has been optimized and commented. I also fixed the errors and warning I could find.
-Since then, it has also been updated for Blender 2.8.
+Since then, it has also been updated for Blender 2.8 and has seen a few new features.
 
 I do not know if PyroEvil is planning on continuing development of this add-on, but I am.
 
@@ -16,7 +16,7 @@ I do not know if PyroEvil is planning on continuing development of this add-on, 
 
 Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip* for your blender version.
 
-> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) or the [2.8 branch](https://github.com/ScottishCyclops/tensionmap/tree/2.8) on github, then click the button that says *Clone or download*, then *Download ZIP*.
+> If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*.
 
 Once downloaded, extract the ZIP file to find `tensionmap.py`.
 
@@ -33,22 +33,34 @@ Click on the checkbox to enable it.
 
 If you now select any Object of type *MESH* and go into the *Properties* panel, under the *Data* tab, you should see a new section called *Tension Map Script*.
 
-Enable it then click on the *Update tension map* button.
+Enable it.
 
-Two new groups should have been added to your *Vertex Groups*, as well as one *Vertex Colors* entry.
+Two new groups should have been added to your *Vertex Groups*.
+
+If you then check *Enable Vertex Colors*, one *Vertex Colors* entry will also be added.
 
 
 Use the vertex groups to drive things such as modifiers, and vertex colors to drive materials.
+> Please note that Vertex Colors is disabled by default because it can be quite computationaly intensive.
 
 
 You can access the vertex colors though the *Attribute* node, by simply witting **tm_tension** in the *Name* field.
 
 You then want to plug the color output to a *Separate RGB* node, to get squeezed values from the Red channel and stretch values from the Green channel. Note that the Blue channel is not used (for now).
 
+As of now, you have the following parameters:
+- Multiplier: multiplies the output by a certain factor
+- Minimum: sets a minimum squeeze and stretch value for every vertex
+- Maximum: sets a maximum squeeze and stretch value for every vertex
+
+> Note that vertex groups can only contain values between 0 and 1
+
+> Also note that theses parameters are linked to the Mesh data, not the Object data. A second object with the same mesh might create unwanted results
+
 
 ## Bugs and suggestions
 
-Please report any bugs or suggestions in the appropriated tab on the [github page](https://github.com/ScottishCyclops/tensionmap).
+Please report any bugs or suggestions in the appropriated tab on the [Github page](https://github.com/ScottishCyclops/tensionmap/issues).
 
 
 ## TODO
