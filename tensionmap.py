@@ -45,30 +45,30 @@ tm_update_modes = ["OBJECT", "WEIGHT_PAINT", "VERTEX_PAINT"]
 
 def get_or_create_vertex_group(obj, group_name):
     """
-    Creates a new vertex group and initializes it only if it doesn't exist then returns it's index
+    Creates a new vertex group and initializes it only if it doesn't exist then returns it
     :param obj: the object to operate on
     :param group_name: the name of the group to get or create
-    :return: the index of the vertex group
+    :return: the the vertex group
     """
 
     if group_name not in obj.vertex_groups:
         obj.vertex_groups.new(name=group_name)
         for i in range(len(obj.data.vertices)):
             obj.vertex_groups[group_name].add([i], 0.0, "REPLACE")
-    return obj.vertex_groups[group_name].index
+    return obj.vertex_groups[group_name]
 
 
 def get_or_create_vertex_colors(obj, colors_name):
     """
-    Creates new vertex colors data only if it doesn't exist then returns it's name
+    Creates new vertex colors data only if it doesn't exist then returns it
     :param obj: the object to operate on
     :param colors_name: the name of the colors data to get or create
-    :return: the name of the vertex colors
+    :return: the vertex colors
     """
 
     if colors_name not in obj.data.vertex_colors:
         obj.data.vertex_colors.new(name=colors_name)
-    return obj.data.vertex_colors[colors_name].name
+    return obj.data.vertex_colors[colors_name]
 
 
 def tm_update(obj, context):
@@ -94,14 +94,18 @@ def tm_update(obj, context):
     global kept_modifiers
 
     # check vertex groups and vertex colors existence, add them otherwise
-    index_squeeze = get_or_create_vertex_group(obj, "tm_stretch")
-    index_stretch = get_or_create_vertex_group(obj, "tm_squeeze")
-    index_tension = get_or_create_vertex_colors(obj, "tm_tension")
+    group_squeeze = get_or_create_vertex_group(obj, "tm_squeeze")
+    group_stretch = get_or_create_vertex_group(obj, "tm_stretch")
+
+    # optimization
+    num_modifiers = len(obj.modifiers)
+    range_modifiers = range(num_modifiers)
+    num_vertices = len(obj.data.vertices)
 
     # save modifier viewport show state
     # temporarily hide modifiers to create a deformed mesh data
-    show_original_state = [False] * len(obj.modifiers)
-    for i in range(len(obj.modifiers)):
+    show_original_state = [False] * num_modifiers
+    for i in range_modifiers:
         show_original_state[i] = obj.modifiers[i].show_viewport
 
         # if the modifier is not one we keep for the deformed mesh, hide it for now
@@ -118,11 +122,11 @@ def tm_update(obj, context):
     deformed_mesh = object_eval.to_mesh()
 
     # restore modifiers viewport show state
-    for i in range(len(obj.modifiers)):
+    for i in range_modifiers:
         obj.modifiers[i].show_viewport = show_original_state[i]
 
     # array to store new weight for each vertices
-    weights = [0.0] * len(obj.data.vertices)
+    weights = [0.0] * num_vertices
 
     # calculate the new weights
     for edge in obj.data.edges:
@@ -134,7 +138,6 @@ def tm_update(obj, context):
         deformed_edge_length = (
             deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
-        # TODO: give more option, like minimum, maximum, logarithmic, etc
         deformation_factor = (original_edge_length -
                               deformed_edge_length) * obj.data.tm_multiply
 
@@ -146,31 +149,32 @@ def tm_update(obj, context):
     object_eval.to_mesh_clear()
 
     # put the new values in the vertex groups
-    for i in range(len(obj.data.vertices)):
+    for i in range(num_vertices):
+        add_index = [i]
         if weights[i] >= 0:
-            # positive: squeezed
-            obj.vertex_groups[index_stretch].add([i], 0.0, "REPLACE")
-            obj.vertex_groups[index_squeeze].add([i], weights[i], "REPLACE")
+            # positive: stretched
+            group_squeeze.add(add_index, obj.data.tm_minimum, "REPLACE")
+            group_stretch.add(add_index, max(obj.data.tm_minimum, min(obj.data.tm_maximum, weights[i])), "REPLACE")
         else:
-            # negative: stretched
+            # negative: squeezed
             # invert weights to keep only positive values
-            obj.vertex_groups[index_stretch].add([i], -weights[i], "REPLACE")
-            obj.vertex_groups[index_squeeze].add([i], 0.0, "REPLACE")
+            group_squeeze.add(add_index, max(obj.data.tm_minimum, min(obj.data.tm_maximum, -weights[i])), "REPLACE")
+            group_stretch.add(add_index, obj.data.tm_minimum, "REPLACE")
 
-    # put the new values from the vertex groups in the vertex colors
-    # red channel is stretched
-    # green channel is squeezed
-    # blue channel is not used
-    for i in range(len(obj.data.polygons)):
-        # k v -> key value
-        for k, v in enumerate(obj.data.polygons[i].loop_indices):
-            vertex = obj.data.polygons[i].vertices[k]
-            obj.data.vertex_colors[index_tension].data[v].color[0] = \
-                obj.vertex_groups[index_stretch].weight(vertex)
-            obj.data.vertex_colors[index_tension].data[v].color[1] = \
-                obj.vertex_groups[index_squeeze].weight(vertex)
-            # ignoring blue for now
-            # obj.data.vertex_colors[index_tension].data[v].color[2] = 0.0
+    if obj.data.tm_enable_vertex_colors:
+        colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
+        # put the new values from the vertex groups in the vertex colors
+        # this is heavy, but vertex colors are stored by vertex loop
+        # and there is no simpler way to do it (it would seem)
+        for i in range(len(obj.data.polygons)):
+            polygon = obj.data.polygons[i]
+            for key, value in enumerate(polygon.loop_indices):
+                vertex_color = colors_tension.data[value]
+                vertex = polygon.vertices[key]
+
+                vertex_color.color[0] = group_stretch.weight(vertex)  # red
+                vertex_color.color[1] = group_squeeze.weight(vertex)  # green
+                vertex_color.color[2] = 0.0  # blue
 
 
 def tm_update_handler(scene):
@@ -194,7 +198,7 @@ def tm_update_handler(scene):
         tm_update(obj, bpy.context)
 
 
-def tm_update_selected(context):
+def tm_update_selected(self, context):
     """
     Updates the tension map for the selected object
     :param context: the context in which the selected object is
@@ -212,7 +216,7 @@ class TmUpdateSelected(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        tm_update_selected(context)
+        tm_update_selected(self, context)
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -244,7 +248,10 @@ class TmPanel(bpy.types.Panel):
         row1 = flow.column()
         row1.active = context.object.data.tm_active
         row1.operator("tm.update_selected")
+        row1.prop(context.object.data, "tm_enable_vertex_colors", text="Enable Vertex Colors")
         row1.prop(context.object.data, "tm_multiply", text="Multiplier")
+        row1.prop(context.object.data, "tm_minimum", text="Minimum")
+        row1.prop(context.object.data, "tm_maximum", text="Maximum")
 
         '''
         # TODO: finish implementing interface for choosing modifiers
@@ -268,12 +275,37 @@ def add_props():
     Method responsible for adding properties to the mesh type
     :return: nothing
     """
-    bpy.types.Mesh.tm_active = \
-        bpy.props.BoolProperty(
-            name="tm_active", description="Activate tension map on this mesh", default=False)
-    bpy.types.Mesh.tm_multiply = \
-        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=-1000.0, max=1000.0,
-                                default=1.0)
+    bpy.types.Mesh.tm_active = bpy.props.BoolProperty(
+            name="tm_active",
+            description="Activate tension map on this mesh",
+            default=False,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_multiply = bpy.props.FloatProperty(
+            name="tm_multiply",
+            description="Tension map intensity multiplier",
+            min=0.0,
+            max=9999.0,
+            default=1.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_minimum = bpy.props.FloatProperty(
+            name="tm_minimum",
+            description="Tension map minimum value",
+            min=0.0,
+            max=1.0,
+            default=0.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_maximum = bpy.props.FloatProperty(
+            name="tm_maximum",
+            description="Tension map maximum value",
+            min=0.0,
+            max=1.0,
+            default=1.0,
+            update=tm_update_selected)
+    bpy.types.Mesh.tm_enable_vertex_colors = bpy.props.BoolProperty(
+            name="tm_enable_vertex_colors",
+            description="Whether to enable vertex colors (takes longer to process each frame)",
+            default=False,
+            update=tm_update_selected)
 
 
 def remove_props():
@@ -283,6 +315,9 @@ def remove_props():
     """
     del bpy.types.Mesh.tm_active
     del bpy.types.Mesh.tm_multiply
+    del bpy.types.Mesh.tm_minimum
+    del bpy.types.Mesh.tm_maximum
+    del bpy.types.Mesh.tm_enable_vertex_colors
 
 
 def add_handlers():
