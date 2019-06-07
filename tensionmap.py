@@ -272,7 +272,7 @@ def add_props():
         bpy.props.BoolProperty(
             name="tm_active", description="Activate tension map on this mesh", default=False)
     bpy.types.Mesh.tm_multiply = \
-        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=-1000.0, max=1000.0,
+        bpy.props.FloatProperty(name="tm_multiply", description="Tension map intensity multiplier", min=0.0, max=9999.0,
                                 default=1.0)
 
 
