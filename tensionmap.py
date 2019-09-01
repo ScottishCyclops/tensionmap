@@ -343,7 +343,7 @@ def add_props():
     bpy.types.Mesh.tm_enable_vertex_groups = bpy.props.BoolProperty(
             name="tm_enable_vertex_groups",
             description="Whether to enable vertex groups",
-            default=True,
+            default=False,
             update=tm_update_selected)
 
 
