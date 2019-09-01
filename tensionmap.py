@@ -20,7 +20,7 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (2, 1, 0),
+    "version":     (2, 0, 1),
     "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
@@ -31,6 +31,7 @@ bl_info = {
 }
 
 last_processed_frame = None
+original_edge_lengths = []
 # list of modifiers that we will keep to compute the deformation
 # TODO: update based on list in docs
 # https://docs.blender.org/api/blender2.8/bpy.types.Modifier.html#bpy.types.Modifier.type
@@ -87,15 +88,20 @@ def tm_update(obj, context):
     if not obj.data.tm_active:
         return
 
+    # only care if some method of output is activated to avoid overhead
+    if not obj.data.tm_enable_vertex_colors and not obj.data.tm_enable_vertex_groups:
+        return
+
     # can't edit vertex group and so on when in other modes
     if obj.mode not in tm_update_modes:
         return
 
     global kept_modifiers
 
-    # check vertex groups and vertex colors existence, add them otherwise
-    group_squeeze = get_or_create_vertex_group(obj, "tm_squeeze")
-    group_stretch = get_or_create_vertex_group(obj, "tm_stretch")
+    # check vertex groups and vertex colors existence, add them otherwise   
+    if obj.data.tm_enable_vertex_groups:
+        group_squeeze = get_or_create_vertex_group(obj, "tm_squeeze")
+        group_stretch = get_or_create_vertex_group(obj, "tm_stretch")
 
     # optimization
     num_modifiers = len(obj.modifiers)
@@ -129,12 +135,13 @@ def tm_update(obj, context):
     weights = [0.0] * num_vertices
 
     # calculate the new weights
-    for edge in obj.data.edges:
+    global original_edge_lengths
+    for i in range(len(obj.data.edges)):
+        edge = obj.data.edges[i]
         first_vertex = edge.vertices[0]
         second_vertex = edge.vertices[1]
 
-        original_edge_length = (
-            obj.data.vertices[first_vertex].co - obj.data.vertices[second_vertex].co).length
+        original_edge_length = original_edge_lengths[i]
         deformed_edge_length = (
             deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
@@ -147,35 +154,60 @@ def tm_update(obj, context):
 
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
-
+    
+    #create vertex color list for faster access
+    number_of_tm_channels = 2
+    vertex_colors = [0]*(number_of_tm_channels*num_vertices)
     # put the new values in the vertex groups
     for i in range(num_vertices):
         add_index = [i]
+        stretch_value = obj.data.tm_minimum
+        squeeze_value = obj.data.tm_minimum
         if weights[i] >= 0:
             # positive: stretched
-            group_squeeze.add(add_index, obj.data.tm_minimum, "REPLACE")
-            group_stretch.add(add_index, max(obj.data.tm_minimum, min(obj.data.tm_maximum, weights[i])), "REPLACE")
+            stretch_value = max(obj.data.tm_minimum, min(obj.data.tm_maximum, weights[i]))
+            if obj.data.tm_enable_vertex_groups:
+                group_squeeze.add(add_index, obj.data.tm_minimum, "REPLACE")
+                group_stretch.add(add_index, stretch_value, "REPLACE")
         else:
             # negative: squeezed
             # invert weights to keep only positive values
-            group_squeeze.add(add_index, max(obj.data.tm_minimum, min(obj.data.tm_maximum, -weights[i])), "REPLACE")
-            group_stretch.add(add_index, obj.data.tm_minimum, "REPLACE")
+            squeeze_value = max(obj.data.tm_minimum, min(obj.data.tm_maximum, -weights[i]))
+            if obj.data.tm_enable_vertex_groups:
+                group_squeeze.add(add_index, squeeze_value, "REPLACE")
+                group_stretch.add(add_index, obj.data.tm_minimum, "REPLACE")
+        vertex_colors[i*number_of_tm_channels] = stretch_value  # red
+        vertex_colors[i*number_of_tm_channels+1] = squeeze_value  # green
 
     if obj.data.tm_enable_vertex_colors:
         colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
         # put the new values from the vertex groups in the vertex colors
         # this is heavy, but vertex colors are stored by vertex loop
         # and there is no simpler way to do it (it would seem)
-        for i in range(len(obj.data.polygons)):
-            polygon = obj.data.polygons[i]
-            for key, value in enumerate(polygon.loop_indices):
-                vertex_color = colors_tension.data[value]
-                vertex = polygon.vertices[key]
+        for poly_idx in range(len(obj.data.polygons)):
+            polygon = obj.data.polygons[poly_idx]
+            for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
+                vertex_color = colors_tension.data[loop_idx]
+                vertex_idx = polygon.vertices[loop_vertex_idx]
+                vertex_color.color[0] = vertex_colors[vertex_idx*number_of_tm_channels]
+                vertex_color.color[1] = vertex_colors[vertex_idx*number_of_tm_channels+1]
 
-                vertex_color.color[0] = group_stretch.weight(vertex)  # red
-                vertex_color.color[1] = group_squeeze.weight(vertex)  # green
-                vertex_color.color[2] = 0.0  # blue
-
+                        
+def tm_update_original_edges(obj):
+    """
+    Updates the original edges of an object
+    :param obj: the object to operate on
+    :return: nothing
+    """
+    num_vertices = len(obj.data.vertices)
+    global original_edge_lengths 
+    original_edge_lengths = [0]*len(obj.data.edges)
+    for i in range(len(obj.data.edges)):
+        edge = obj.data.edges[i]
+        first_vertex_idx = edge.vertices[0]
+        second_vertex_idx = edge.vertices[1]
+        original_edge_lengths[i] = (obj.data.vertices[first_vertex_idx].co - obj.data.vertices[second_vertex_idx].co).length
+    
 
 def tm_update_handler(scene):
     """
@@ -204,6 +236,7 @@ def tm_update_selected(self, context):
     :param context: the context in which the selected object is
     :return: nothing
     """
+    tm_update_original_edges(context.object)
     tm_update(context.object, context)
 
 
@@ -249,6 +282,7 @@ class TmPanel(bpy.types.Panel):
         row1.active = context.object.data.tm_active
         row1.operator("tm.update_selected")
         row1.prop(context.object.data, "tm_enable_vertex_colors", text="Enable Vertex Colors")
+        row1.prop(context.object.data, "tm_enable_vertex_groups", text="Enable Vertex Groups")
         row1.prop(context.object.data, "tm_multiply", text="Multiplier")
         row1.prop(context.object.data, "tm_minimum", text="Minimum")
         row1.prop(context.object.data, "tm_maximum", text="Maximum")
@@ -306,6 +340,11 @@ def add_props():
             description="Whether to enable vertex colors (takes longer to process each frame)",
             default=False,
             update=tm_update_selected)
+    bpy.types.Mesh.tm_enable_vertex_groups = bpy.props.BoolProperty(
+            name="tm_enable_vertex_groups",
+            description="Whether to enable vertex groups",
+            default=True,
+            update=tm_update_selected)
 
 
 def remove_props():
@@ -318,6 +357,7 @@ def remove_props():
     del bpy.types.Mesh.tm_minimum
     del bpy.types.Mesh.tm_maximum
     del bpy.types.Mesh.tm_enable_vertex_colors
+    del bpy.types.Mesh.tm_enable_vertex_groups
 
 
 def add_handlers():
