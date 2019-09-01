@@ -20,7 +20,7 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (2, 0, 1),
+    "version":     (2, 1, 1),
     "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
@@ -88,7 +88,7 @@ def tm_update(obj, context):
     if not obj.data.tm_active:
         return
 
-    # only care if some method of output is activated to avoid overhead
+    # only care if some method of output is activated, to avoid overhead
     if not obj.data.tm_enable_vertex_colors and not obj.data.tm_enable_vertex_groups:
         return
 
@@ -206,7 +206,8 @@ def tm_update_original_edges(obj):
         edge = obj.data.edges[i]
         first_vertex_idx = edge.vertices[0]
         second_vertex_idx = edge.vertices[1]
-        original_edge_lengths[i] = (obj.data.vertices[first_vertex_idx].co - obj.data.vertices[second_vertex_idx].co).length
+        original_edge_lengths[i] = (obj.data.vertices[first_vertex_idx].co - 
+                                    obj.data.vertices[second_vertex_idx].co).length
     
 
 def tm_update_handler(scene):
