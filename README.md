@@ -46,7 +46,7 @@ Use the vertex groups to drive things such as modifiers, and vertex colors to dr
 
 You can access the vertex colors though the *Attribute* node, by simply witting **tm_tension** in the *Name* field.
 
-You then want to plug the color output to a *Separate RGB* node, to get squeezed values from the Red channel and stretch values from the Green channel. Note that the Blue channel is not used (for now).
+You then want to plug the color output to a *Separate RGB* node, to get stretch values from the Red channel and squeeze values from the Green channel. Note that the Blue channel is not used (for now).
 
 As of now, you have the following parameters:
 - Multiplier: multiplies the output by a certain factor
