@@ -32,7 +32,6 @@ bl_info = {
 
 last_processed_frame = None
 number_of_tm_channels = 2
-original_edge_lengths_per_obj = dict()
 # list of modifiers that we will keep to compute the deformation
 # TODO: update based on list in docs
 # https://docs.blender.org/api/blender2.8/bpy.types.Modifier.html#bpy.types.Modifier.type
@@ -135,18 +134,14 @@ def tm_update(obj, context):
     # array to store new weight for each vertices
     weights = [0.0] * num_vertices
 
-    global original_edge_lengths_per_obj
-    if not obj.name in original_edge_lengths_per_obj:
-        original_edge_lengths_per_obj[obj.name] = tm_update_original_edges(obj)
-        
-    original_edge_lengths = original_edge_lengths_per_obj[obj.name]            
     # calculate the new weights
     for i in range(len(obj.data.edges)):
         edge = obj.data.edges[i]
         first_vertex = edge.vertices[0]
         second_vertex = edge.vertices[1]
 
-        original_edge_length = original_edge_lengths[i]
+        original_edge_length = (obj.data.vertices[first_vertex].co - 
+                                obj.data.vertices[second_vertex].co).length
         deformed_edge_length = (
             deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
@@ -192,22 +187,7 @@ def tm_update(obj, context):
                 vertex_idx = polygon.vertices[loop_vertex_idx]
                 vertex_color.color = (vertex_colors[vertex_idx*number_of_tm_channels],
                                       vertex_colors[vertex_idx*number_of_tm_channels+1],0,1)
-                        
-def tm_update_original_edges(obj):
-    """
-    Updates the original edges of an object
-    :param obj: the object to operate on
-    :return: the updated original edges of an object
-    """
-    num_vertices = len(obj.data.vertices)
-    original_edge_lengths = [0]*len(obj.data.edges)
-    for i in range(len(obj.data.edges)):
-        edge = obj.data.edges[i]
-        first_vertex_idx = edge.vertices[0]
-        second_vertex_idx = edge.vertices[1]
-        original_edge_lengths[i] = (obj.data.vertices[first_vertex_idx].co - 
-                                    obj.data.vertices[second_vertex_idx].co).length
-    return original_edge_lengths
+
 
 def tm_update_handler(scene):
     """
@@ -237,12 +217,6 @@ def tm_update_selected(self, context):
     :return: nothing
     """
 
-    global original_edge_lengths_per_obj
-    if context.object.data.tm_active:
-        original_edge_lengths_per_obj[context.object.name]=tm_update_original_edges(context.object)
-    else:
-        del original_edge_lengths_per_obj[context.object.name]
-    print(original_edge_lengths_per_obj.keys())
     tm_update(context.object, context)
 
 
