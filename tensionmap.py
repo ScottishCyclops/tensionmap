@@ -51,7 +51,6 @@ def get_or_create_vertex_group(obj, group_name):
     :param group_name: the name of the group to get or create
     :return: the the vertex group
     """
-
     if group_name not in obj.vertex_groups:
         obj.vertex_groups.new(name=group_name)
         for i in range(len(obj.data.vertices)):
@@ -66,7 +65,6 @@ def get_or_create_vertex_colors(obj, colors_name):
     :param colors_name: the name of the colors data to get or create
     :return: the vertex colors
     """
-
     if colors_name not in obj.data.vertex_colors:
         obj.data.vertex_colors.new(name=colors_name)
     return obj.data.vertex_colors[colors_name]
@@ -79,7 +77,6 @@ def tm_update(obj, context):
     :param context: the context of the operation
     :return: nothing
     """
-
     # only care about meshes
     if obj.type != "MESH":
         return
@@ -96,8 +93,6 @@ def tm_update(obj, context):
     if obj.mode not in tm_update_modes:
         return
 
-    global kept_modifiers
-
     # check vertex groups and vertex colors existence, add them otherwise
     if obj.data.tm_enable_vertex_groups:
         group_squeeze = get_or_create_vertex_group(obj, "tm_squeeze")
@@ -112,14 +107,15 @@ def tm_update(obj, context):
     # temporarily hide modifiers to create a deformed mesh data
     show_original_state = [False] * num_modifiers
     for i in range_modifiers:
-        show_original_state[i] = obj.modifiers[i].show_viewport
+        modifier = obj.modifiers[i]
+        show_original_state[i] = modifier.show_viewport
 
         # if the modifier is not one we keep for the deformed mesh, hide it for now
         # TODO: use a bool property on each modifier to determine if it should be kept
         # it appears a property can't be added to the Modifier type
         # another way will need to be found
-        if obj.modifiers[i].type not in kept_modifiers:
-            obj.modifiers[i].show_viewport = False
+        if modifier.type not in kept_modifiers:
+            modifier.show_viewport = False
 
     # this converts the object to a mesh
     # as it is currently visible in the viewport
@@ -155,13 +151,17 @@ def tm_update(obj, context):
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
 
-    # create vertex color list for faster access
-    vertex_colors = [0]*(number_of_tm_channels*num_vertices)
-    # put the new values in the vertex groups
+    # create vertex color list for faster access only if vertex color is activated
+    if obj.data.tm_enable_vertex_colors:
+        vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
+
+    # calculate the new values
+    # store them in the vertex_colors array if the feature is active
+    # store them in the vertex groups if the feature is active
     for i in range(num_vertices):
-        add_index = [i]
         stretch_value = obj.data.tm_minimum
         squeeze_value = obj.data.tm_minimum
+
         if weights[i] >= 0:
             # positive: stretched
             stretch_value = max(obj.data.tm_minimum, min(
@@ -171,15 +171,21 @@ def tm_update(obj, context):
             # invert weights to keep only positive values
             squeeze_value = max(obj.data.tm_minimum, min(
                 obj.data.tm_maximum, -weights[i]))
+
         if obj.data.tm_enable_vertex_groups:
+            add_index = [i]
             group_squeeze.add(add_index, squeeze_value, "REPLACE")
             group_stretch.add(add_index, stretch_value, "REPLACE")
-        vertex_colors[i*number_of_tm_channels] = stretch_value  # red
-        vertex_colors[i*number_of_tm_channels+1] = squeeze_value  # green
 
+        if obj.data.tm_enable_vertex_colors:
+            # red
+            vertex_colors[i * number_of_tm_channels] = stretch_value
+            # green
+            vertex_colors[i * number_of_tm_channels + 1] = squeeze_value
+
+    # store the calculated vertex colors if the feature is active
     if obj.data.tm_enable_vertex_colors:
         colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
-        # put the new values from the vertex groups in the vertex colors
         # this is heavy, but vertex colors are stored by vertex loop
         # and there is no simpler way to do it (it would seem)
         for poly_idx in range(len(obj.data.polygons)):
@@ -187,8 +193,9 @@ def tm_update(obj, context):
             for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
                 vertex_color = colors_tension.data[loop_idx]
                 vertex_idx = polygon.vertices[loop_vertex_idx]
-                vertex_color.color = (vertex_colors[vertex_idx*number_of_tm_channels],
-                                      vertex_colors[vertex_idx*number_of_tm_channels+1], 0, 1)
+                # replace the color by a 4D vector, using 0 for blue and 1 for alpha
+                vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
+                                      vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
 
 
 def tm_update_handler(scene):
@@ -198,7 +205,6 @@ def tm_update_handler(scene):
     :param scene: the scene to operate on
     :return: nothing
     """
-
     global last_processed_frame
 
     # avoid executing the operations if the frame hasn't really changed
@@ -218,7 +224,6 @@ def tm_update_selected(self, context):
     :param context: the context in which the selected object is
     :return: nothing
     """
-
     tm_update(context.object, context)
 
 
@@ -326,7 +331,7 @@ def add_props():
         update=tm_update_selected)
     bpy.types.Mesh.tm_enable_vertex_colors = bpy.props.BoolProperty(
         name="tm_enable_vertex_colors",
-        description="Whether to enable vertex colors (takes longer to process each frame)",
+        description="Whether to enable vertex colors",
         default=False,
         update=tm_update_selected)
 
