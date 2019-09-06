@@ -35,7 +35,7 @@ If you now select any Object of type *MESH* and go into the *Properties* panel, 
 
 Enable it.
 
-Two new groups should have been added to your *Vertex Groups*.
+If you check *Enable Vertex Groups*, two new groups should be added to your *Vertex Groups*.
 
 If you then check *Enable Vertex Colors*, one *Vertex Colors* entry will also be added.
 
