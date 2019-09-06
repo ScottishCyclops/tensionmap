@@ -14,7 +14,7 @@ I do not know if PyroEvil is planning on continuing development of this add-on, 
 
 ## Installation
 
-Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.x.zip* for your blender version.
+Go to the [releases page](https://github.com/ScottishCyclops/tensionmap/releases) on github and under *Downloads*, choose the latest *tensionmap-x.x.x.zip* for your blender version.
 
 > If you want the latest in-developpment version, which is not recommanded, you can go on the [master branch](https://github.com/ScottishCyclops/tensionmap/tree/master) on github, then click the button that says *Clone or download*, then *Download ZIP*.
 
@@ -35,18 +35,23 @@ If you now select any Object of type *MESH* and go into the *Properties* panel, 
 
 Enable it.
 
-If you check *Enable Vertex Groups*, two new groups should be added to your *Vertex Groups*.
+Tension Map has two modes of operation that can be enabled or disabled separatly to improve playback performance depending on your needs.
 
-If you then check *Enable Vertex Colors*, one *Vertex Colors* entry will also be added.
+If you check *Enable Vertex Groups*, two new groups should be added to your *Vertex Groups*: `tm_squeeze` and `tm_stretch`.<br />
+Once you disable the option, you can safely remove the two groups if not needed anymore.
+
+If you check *Enable Vertex Colors*, one *Vertex Colors* entry will also be added: `tm_tension`.<br />
+Again, once you disable the option, you can safely remove the color if not needed anymore.
 
 
 Use the vertex groups to drive things such as modifiers, and vertex colors to drive materials.
-> Please note that Vertex Colors is disabled by default because it can be quite computationaly intensive.
-
 
 You can access the vertex colors though the *Attribute* node, by simply witting **tm_tension** in the *Name* field.
 
 You then want to plug the color output to a *Separate RGB* node, to get stretch values from the Red channel and squeeze values from the Green channel. Note that the Blue channel is not used (for now).
+
+> Each mode of operation is quite computationaly intensive in realtime. Enabling, one, the other or both modes will make your framerate at least 2.7 times slower.<br />
+> As such, you should globally disable Tension Map on your objects while you are working on other things.
 
 As of now, you have the following parameters:
 - Multiplier: multiplies the output by a certain factor
