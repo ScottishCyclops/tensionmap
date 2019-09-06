@@ -20,7 +20,7 @@ import bpy
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (2, 1, 1),
+    "version":     (2, 2, 0),
     "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
@@ -98,7 +98,7 @@ def tm_update(obj, context):
 
     global kept_modifiers
 
-    # check vertex groups and vertex colors existence, add them otherwise   
+    # check vertex groups and vertex colors existence, add them otherwise
     if obj.data.tm_enable_vertex_groups:
         group_squeeze = get_or_create_vertex_group(obj, "tm_squeeze")
         group_stretch = get_or_create_vertex_group(obj, "tm_stretch")
@@ -140,7 +140,7 @@ def tm_update(obj, context):
         first_vertex = edge.vertices[0]
         second_vertex = edge.vertices[1]
 
-        original_edge_length = (obj.data.vertices[first_vertex].co - 
+        original_edge_length = (obj.data.vertices[first_vertex].co -
                                 obj.data.vertices[second_vertex].co).length
         deformed_edge_length = (
             deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
@@ -154,7 +154,7 @@ def tm_update(obj, context):
 
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
-    
+
     # create vertex color list for faster access
     vertex_colors = [0]*(number_of_tm_channels*num_vertices)
     # put the new values in the vertex groups
@@ -164,11 +164,13 @@ def tm_update(obj, context):
         squeeze_value = obj.data.tm_minimum
         if weights[i] >= 0:
             # positive: stretched
-            stretch_value = max(obj.data.tm_minimum, min(obj.data.tm_maximum, weights[i]))
+            stretch_value = max(obj.data.tm_minimum, min(
+                obj.data.tm_maximum, weights[i]))
         else:
             # negative: squeezed
             # invert weights to keep only positive values
-            squeeze_value = max(obj.data.tm_minimum, min(obj.data.tm_maximum, -weights[i]))
+            squeeze_value = max(obj.data.tm_minimum, min(
+                obj.data.tm_maximum, -weights[i]))
         if obj.data.tm_enable_vertex_groups:
             group_squeeze.add(add_index, squeeze_value, "REPLACE")
             group_stretch.add(add_index, stretch_value, "REPLACE")
@@ -186,7 +188,7 @@ def tm_update(obj, context):
                 vertex_color = colors_tension.data[loop_idx]
                 vertex_idx = polygon.vertices[loop_vertex_idx]
                 vertex_color.color = (vertex_colors[vertex_idx*number_of_tm_channels],
-                                      vertex_colors[vertex_idx*number_of_tm_channels+1],0,1)
+                                      vertex_colors[vertex_idx*number_of_tm_channels+1], 0, 1)
 
 
 def tm_update_handler(scene):
@@ -261,8 +263,10 @@ class TmPanel(bpy.types.Panel):
         row1 = flow.column()
         row1.active = context.object.data.tm_active
         row1.operator("tm.update_selected")
-        row1.prop(context.object.data, "tm_enable_vertex_groups", text="Enable Vertex Groups")
-        row1.prop(context.object.data, "tm_enable_vertex_colors", text="Enable Vertex Colors")
+        row1.prop(context.object.data, "tm_enable_vertex_groups",
+                  text="Enable Vertex Groups")
+        row1.prop(context.object.data, "tm_enable_vertex_colors",
+                  text="Enable Vertex Colors")
         row1.prop(context.object.data, "tm_multiply", text="Multiplier")
         row1.prop(context.object.data, "tm_minimum", text="Minimum")
         row1.prop(context.object.data, "tm_maximum", text="Maximum")
@@ -290,41 +294,41 @@ def add_props():
     :return: nothing
     """
     bpy.types.Mesh.tm_active = bpy.props.BoolProperty(
-            name="tm_active",
-            description="Activate tension map on this mesh",
-            default=False,
-            update=tm_update_selected)
+        name="tm_active",
+        description="Activate tension map on this mesh",
+        default=False,
+        update=tm_update_selected)
     bpy.types.Mesh.tm_multiply = bpy.props.FloatProperty(
-            name="tm_multiply",
-            description="Tension map intensity multiplier",
-            min=0.0,
-            max=9999.0,
-            default=1.0,
-            update=tm_update_selected)
+        name="tm_multiply",
+        description="Tension map intensity multiplier",
+        min=0.0,
+        max=9999.0,
+        default=1.0,
+        update=tm_update_selected)
     bpy.types.Mesh.tm_minimum = bpy.props.FloatProperty(
-            name="tm_minimum",
-            description="Tension map minimum value",
-            min=0.0,
-            max=1.0,
-            default=0.0,
-            update=tm_update_selected)
+        name="tm_minimum",
+        description="Tension map minimum value",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        update=tm_update_selected)
     bpy.types.Mesh.tm_maximum = bpy.props.FloatProperty(
-            name="tm_maximum",
-            description="Tension map maximum value",
-            min=0.0,
-            max=1.0,
-            default=1.0,
-            update=tm_update_selected)
+        name="tm_maximum",
+        description="Tension map maximum value",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        update=tm_update_selected)
     bpy.types.Mesh.tm_enable_vertex_groups = bpy.props.BoolProperty(
-            name="tm_enable_vertex_groups",
-            description="Whether to enable vertex groups",
-            default=False,
-            update=tm_update_selected)
+        name="tm_enable_vertex_groups",
+        description="Whether to enable vertex groups",
+        default=False,
+        update=tm_update_selected)
     bpy.types.Mesh.tm_enable_vertex_colors = bpy.props.BoolProperty(
-            name="tm_enable_vertex_colors",
-            description="Whether to enable vertex colors (takes longer to process each frame)",
-            default=False,
-            update=tm_update_selected)
+        name="tm_enable_vertex_colors",
+        description="Whether to enable vertex colors (takes longer to process each frame)",
+        default=False,
+        update=tm_update_selected)
 
 
 def remove_props():
