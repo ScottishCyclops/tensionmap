@@ -194,7 +194,7 @@ def tm_update(obj, context):
 
     # create vertex color list for faster access only if vertex color is activated
     if obj.data.tm_enable_vertex_colors:
-        vertex_colors = [[0.0]*number_of_tm_channels]* num_vertices
+        vertex_colors = [[0.0] * number_of_tm_channels] * num_vertices
 
     # lambda for clamping between min and max
     clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
@@ -221,7 +221,7 @@ def tm_update(obj, context):
 
         if obj.data.tm_enable_vertex_colors:
             # red, green, blue, alpha
-            vertex_colors[i] = (stretch_value,squeeze_value, 0.0, 1.0)
+            vertex_colors[i] = (stretch_value, squeeze_value, 0.0, 1.0)
 
     # store the calculated vertex colors if the feature is active
     if obj.data.tm_enable_vertex_colors:
