@@ -165,7 +165,7 @@ def tm_update(obj, context):
     # array to store new weight for each vertices
     weights = [0.0] * num_vertices
     
-    #creating object_data structure to avoid recalculation
+    # creating object_data structure to avoid recalculation
     global object_data
     if not obj.name in object_data:
         object_data[obj.name] = Object_Data(obj)
@@ -196,7 +196,7 @@ def tm_update(obj, context):
     if obj.data.tm_enable_vertex_colors:
         vertex_colors = [[0.0]*number_of_tm_channels]* num_vertices
 
-    #lambda for clamping between min and max
+    # lambda for clamping between min and max
     clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
 
     # calculate the new values
