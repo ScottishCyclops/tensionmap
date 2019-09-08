@@ -153,7 +153,7 @@ def tm_update(obj, context):
 
     # create vertex color list for faster access only if vertex color is activated
     if obj.data.tm_enable_vertex_colors:
-        vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
+        vertex_colors = [[0.0]*number_of_tm_channels]* num_vertices
 
     #lambda for clamping between min and max
     clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
@@ -179,10 +179,8 @@ def tm_update(obj, context):
             group_stretch.add(add_index, stretch_value, "REPLACE")
 
         if obj.data.tm_enable_vertex_colors:
-            # red
-            vertex_colors[i * number_of_tm_channels] = stretch_value
-            # green
-            vertex_colors[i * number_of_tm_channels + 1] = squeeze_value
+            # red, green, blue, alpha
+            vertex_colors[i] = (stretch_value,squeeze_value, 0.0, 1.0)
 
     # store the calculated vertex colors if the feature is active
     if obj.data.tm_enable_vertex_colors:
@@ -194,9 +192,7 @@ def tm_update(obj, context):
             for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
                 vertex_color = colors_tension.data[loop_idx]
                 vertex_idx = polygon.vertices[loop_vertex_idx]
-                # replace the color by a 4D vector, using 0 for blue and 1 for alpha
-                vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
-                                      vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
+                vertex_color.color = vertex_colors[vertex_idx]
 
 
 def tm_update_handler(scene):
