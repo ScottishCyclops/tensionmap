@@ -155,6 +155,9 @@ def tm_update(obj, context):
     if obj.data.tm_enable_vertex_colors:
         vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
 
+    #lambda for clamping between min and max
+    clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
+
     # calculate the new values
     # store them in the vertex_colors array if the feature is active
     # store them in the vertex groups if the feature is active
@@ -164,13 +167,11 @@ def tm_update(obj, context):
 
         if weights[i] >= 0:
             # positive: stretched
-            stretch_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, weights[i]))
+            stretch_value = clamp(weights[i], obj.data.tm_minimum, obj.data.tm_maximum)
         else:
             # negative: squeezed
             # invert weights to keep only positive values
-            squeeze_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, -weights[i]))
+            squeeze_value = clamp(-weights[i], obj.data.tm_minimum, obj.data.tm_maximum)
 
         if obj.data.tm_enable_vertex_groups:
             add_index = [i]
