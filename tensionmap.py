@@ -47,6 +47,7 @@ tm_update_modes = ["OBJECT", "WEIGHT_PAINT", "VERTEX_PAINT"]
 class Object_Data(bpy.types.Object):
     def __init__(self,obj):
         self.original_edge_lengths = self.__calculate_original_edge_lengths(obj)
+        self.vertex_color_index_mapping = self.__calculate_vertex_color_index_mapping(obj)
         
     def __calculate_original_edge_lengths(self, obj):
         original_edge_lengths = [0]*len(obj.data.edges)
@@ -57,10 +58,26 @@ class Object_Data(bpy.types.Object):
             original_edge_lengths[i] = (obj.data.vertices[first_vertex].co -
                                     obj.data.vertices[second_vertex].co).length
         return original_edge_lengths
+        
+    def __calculate_vertex_color_index_mapping(self, obj):
+        index_mapping=dict()
+        index=0
+        for polygon in obj.data.polygons:
+            for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
+                vertex_idx = polygon.vertices[loop_vertex_idx]
+                index_mapping[index]=vertex_idx
+                index=index+1
+        return index_mapping
 
     @property
     def original_edge_length(self): 
         return self.__original_edge_length
+    @property
+    def vertex_color_index_mapping(self): 
+        return self.__vertex_color_index_mapping
+    @vertex_color_index_mapping.setter
+    def vertex_color_index_mapping(self,vertex_color_index_mapping):
+        self.__vertex_color_index_mapping=vertex_color_index_mapping
 
 def get_or_create_vertex_group(obj, group_name):
     """
@@ -153,6 +170,7 @@ def tm_update(obj, context):
     if not obj.name in object_data:
         object_data[obj.name] = Object_Data(obj)
     obj_data = object_data[obj.name]
+    vertex_color_index_mapping = obj_data.vertex_color_index_mapping
 
     # calculate the new weights
     for i in range(len(obj.data.edges)):
@@ -207,15 +225,11 @@ def tm_update(obj, context):
 
     # store the calculated vertex colors if the feature is active
     if obj.data.tm_enable_vertex_colors:
-        colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
-        # this is heavy, but vertex colors are stored by vertex loop
-        # and there is no simpler way to do it (it would seem)
-        for poly_idx in range(len(obj.data.polygons)):
-            polygon = obj.data.polygons[poly_idx]
-            for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
-                vertex_color = colors_tension.data[loop_idx]
-                vertex_idx = polygon.vertices[loop_vertex_idx]
-                vertex_color.color = vertex_colors[vertex_idx]
+        colors_tension_data = get_or_create_vertex_colors(obj, "tm_tension").data
+        tension_color_size=len(colors_tension_data)
+        for i in range(tension_color_size):
+            index = vertex_color_index_mapping[i]
+            colors_tension_data[i].color = vertex_colors[index]
 
 
 def tm_update_handler(scene):
