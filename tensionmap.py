@@ -30,6 +30,7 @@ bl_info = {
     "category":    "Object"
 }
 
+object_data = dict()
 last_processed_frame = None
 number_of_tm_channels = 2
 # list of modifiers that we will keep to compute the deformation
@@ -43,6 +44,23 @@ kept_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK",
 
 tm_update_modes = ["OBJECT", "WEIGHT_PAINT", "VERTEX_PAINT"]
 
+class Object_Data(bpy.types.Object):
+    def __init__(self,obj):
+        self.original_edge_lengths = self.__calculate_original_edge_lengths(obj)
+        
+    def __calculate_original_edge_lengths(self, obj):
+        original_edge_lengths = [0]*len(obj.data.edges)
+        for i in range(len(obj.data.edges)):
+            edge = obj.data.edges[i]
+            first_vertex = edge.vertices[0]
+            second_vertex = edge.vertices[1]
+            original_edge_lengths[i] = (obj.data.vertices[first_vertex].co -
+                                    obj.data.vertices[second_vertex].co).length
+        return original_edge_lengths
+
+    @property
+    def original_edge_length(self): 
+        return self.__original_edge_length
 
 def get_or_create_vertex_group(obj, group_name):
     """
@@ -129,6 +147,12 @@ def tm_update(obj, context):
 
     # array to store new weight for each vertices
     weights = [0.0] * num_vertices
+    
+    #creating object_data structure to avoid recalculation
+    global object_data
+    if not obj.name in object_data:
+        object_data[obj.name] = Object_Data(obj)
+    obj_data = object_data[obj.name]
 
     # calculate the new weights
     for i in range(len(obj.data.edges)):
@@ -136,8 +160,7 @@ def tm_update(obj, context):
         first_vertex = edge.vertices[0]
         second_vertex = edge.vertices[1]
 
-        original_edge_length = (obj.data.vertices[first_vertex].co -
-                                obj.data.vertices[second_vertex].co).length
+        original_edge_length = obj_data.original_edge_lengths[i]
         deformed_edge_length = (
             deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
 
@@ -221,6 +244,12 @@ def tm_update_selected(self, context):
     :param context: the context in which the selected object is
     :return: nothing
     """
+    global object_data
+    if context.object.data.tm_active:
+        object_data[context.object.name]=Object_Data(context.object)
+    else:
+        del object_data[context.object.name]
+    
     tm_update(context.object, context)
 
 
