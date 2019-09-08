@@ -258,13 +258,14 @@ def tm_update_selected(self, context):
     :param context: the context in which the selected object is
     :return: nothing
     """
-    global object_data
-    if context.object.data.tm_active:
-        object_data[context.object.name]=Object_Data(context.object)
+    obj = context.object
+    name = obj.name
+    if obj.data.tm_active:
+        object_data[name]=Object_Data(obj)
     else:
-        del object_data[context.object.name]
+        del object_data[name]
     
-    tm_update(context.object, context)
+    tm_update(obj, context)
 
 
 class TmUpdateSelected(bpy.types.Operator):
