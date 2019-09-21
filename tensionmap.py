@@ -16,6 +16,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
+import bmesh
 from dataclasses import dataclass
 
 bl_info = {
@@ -33,7 +34,7 @@ bl_info = {
 
 geometry_cache = dict()
 last_processed_frame = None
-number_of_tm_channels = 2
+number_of_color_channels = 4
 # list of modifiers that we will keep to compute the deformation
 # TODO: update based on list in docs
 # https://docs.blender.org/api/blender2.8/bpy.types.Modifier.html#bpy.types.Modifier.type
@@ -58,13 +59,13 @@ def calculate_original_edge_lengths(obj):
     :param obj: the object to operate on
     :return: returns a list of edge lengths
     """
-    edge_lengths = [0] * len(obj.data.edges)
-    for i in range(len(obj.data.edges)):
-        edge = obj.data.edges[i]
-        first_vertex = edge.vertices[0]
-        second_vertex = edge.vertices[1]
-        edge_lengths[i] = (obj.data.vertices[first_vertex].co -
-                           obj.data.vertices[second_vertex].co).length
+    number_of_edges = len(obj.data.edges)
+    edge_lengths = [0] * number_of_edges
+    bmesh_orig = bmesh.new()
+    bmesh_orig.from_mesh(obj.data)
+    bmesh_orig.edges.ensure_lookup_table()
+    for i in range(number_of_edges):
+        edge_lengths[i] = bmesh_orig.edges[i].calc_length()
     return edge_lengths
 
 
@@ -187,43 +188,41 @@ def tm_update(obj, context):
     # referencing the cache data
     # it would be simpler to just generate the needed GeometryData for any non-cached object here,
     # but then we would go through the edge-loop twice, when calculating the edge lengths
-
     if obj.data.tm_enable_geometry_cache:
         if obj not in geometry_cache:
             update_geometry_cache_for_object(obj)
         geometry_data = geometry_cache[obj]
-
-    # calculate the new weights
-    original_vertices = obj.data.vertices
-    deformed_vertices = deformed_mesh.vertices
+    else:
+        original_bmesh = bmesh.new()
+        original_bmesh.from_mesh(obj.data)
+        original_bmesh.edges.ensure_lookup_table()
+    deformed_bmesh = bmesh.new()
+    deformed_bmesh.from_mesh(deformed_mesh)
+    deformed_bmesh.edges.ensure_lookup_table()
     num_edges = len(obj.data.edges)
+    
+    # calculate the new weights
     for i in range(num_edges):
-        edge = obj.data.edges[i]
-        first_vertex = edge.vertices[0]
-        second_vertex = edge.vertices[1]
-
         if obj.data.tm_enable_geometry_cache:
             original_edge_length = geometry_data.original_edge_lengths[i]
         else:
-            original_edge_length = (original_vertices[first_vertex].co -
-                                    original_vertices[second_vertex].co).length
-
-        deformed_edge_length = (
-            deformed_vertices[first_vertex].co - deformed_vertices[second_vertex].co).length
-
-        deformation_factor = (original_edge_length -
+            original_edge_length = original_bmesh.edges[i].calc_length()
+        deformed_edge_length = deformed_bmesh.edges[i].calc_length()
+        deformation_factor = (original_edge_length - 
                               deformed_edge_length) * obj.data.tm_multiply
+        first_vertex, second_vertex = deformed_bmesh.edges[i].verts
 
         # store the weights by subtracting to overlay all the factors for each vertex
-        weights[first_vertex] -= deformation_factor
-        weights[second_vertex] -= deformation_factor
+        weights[first_vertex.index] -= deformation_factor
+        weights[second_vertex.index] -= deformation_factor
+
 
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
 
     # create vertex color list for faster access only if vertex color is activated
     if obj.data.tm_enable_vertex_colors:
-        vertex_colors = [[0.0] * number_of_tm_channels] * num_vertices
+        vertex_colors = [[0.0] * number_of_color_channels] * num_vertices
 
     # lambda for clamping between min and max
     clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
@@ -261,8 +260,7 @@ def tm_update(obj, context):
         colors_tension_data = get_or_create_vertex_colors(obj, "tm_tension").data
         tension_color_size = len(colors_tension_data)
         for i in range(tension_color_size):
-            index = vertex_color_index_mapping[i]
-            colors_tension_data[i].color = vertex_colors[index]
+            colors_tension_data[i].color = vertex_colors[vertex_color_index_mapping[i]]
 
 
 def tm_update_handler(scene):
