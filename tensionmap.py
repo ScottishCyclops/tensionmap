@@ -16,6 +16,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
+import numpy as np
+from numba import jit,njit
 
 bl_info = {
     "name":        "Tension Map Script",
@@ -122,80 +124,117 @@ def tm_update(obj, context):
     depsgraph = context.evaluated_depsgraph_get()
     object_eval = obj.evaluated_get(depsgraph)
     deformed_mesh = object_eval.to_mesh()
+    mesh = obj.data
 
     # restore modifiers viewport show state
     for i in range_modifiers:
         obj.modifiers[i].show_viewport = show_original_state[i]
 
-    # array to store new weight for each vertices
-    weights = [0.0] * num_vertices
-
-    # calculate the new weights
-    for i in range(len(obj.data.edges)):
-        edge = obj.data.edges[i]
-        first_vertex = edge.vertices[0]
-        second_vertex = edge.vertices[1]
-
-        original_edge_length = (obj.data.vertices[first_vertex].co -
-                                obj.data.vertices[second_vertex].co).length
-        deformed_edge_length = (
-            deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
-
-        deformation_factor = (original_edge_length -
-                              deformed_edge_length) * obj.data.tm_multiply
-
-        # store the weights by subtracting to overlay all the factors for each vertex
-        weights[first_vertex] -= deformation_factor
-        weights[second_vertex] -= deformation_factor
+    edges = read_edges(mesh)
+    
+    verts_original = read_vertices(mesh)
+    
+    verts_deformed = read_vertices(deformed_mesh)
+        
+    original_edge_len = np.linalg.norm(verts_original[edges[:,0]] 
+    - verts_original[edges[:,1]],axis=1)
+        
+    deformed_edge_len = np.linalg.norm(verts_deformed[edges[:,0]] 
+    - verts_deformed[edges[:,1]],axis=1)
+        
+    deform_factor = (original_edge_len - deformed_edge_len) * obj.data.tm_multiply
+        
+    weights = np.zeros(num_vertices,dtype='float32')
+    
+    get_weights(weights,edges,deform_factor,num_vertices)
 
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
 
-    # create vertex color list for faster access only if vertex color is activated
+    stretch = np.zeros(num_vertices,dtype='float32')
+    squeeze = np.zeros(num_vertices,dtype='float32')
+    
+    calc_values(stretch,squeeze,num_vertices,weights,0,1)
+    
+    if obj.data.tm_enable_vertex_groups:
+        for i in range(num_vertices):
+            group_squeeze.add([i], squeeze[i], "REPLACE")
+            group_stretch.add([i], stretch[i], "REPLACE") 
+               
     if obj.data.tm_enable_vertex_colors:
-        vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
+        if 'tm_tension' not in obj.data.vertex_colors:
+            obj.data.vertex_colors.new(name='tm_tension')
+        
+        vertex_colors = np.zeros(num_vertices*number_of_tm_channels,dtype='float32')
+        
+        get_colors(vertex_colors,num_vertices,number_of_tm_channels,stretch,squeeze)
+            
+        vertex_colors_data = read_vertex_color_data(mesh)
+        
+        vertex_idxs = read_polygon_vertices(mesh)
+        
+        num_polygons = len(mesh.polygons)
+        
+        loop_indices = np.arange(num_polygons*4).reshape(num_polygons,4)
 
-    # calculate the new values
-    # store them in the vertex_colors array if the feature is active
-    # store them in the vertex groups if the feature is active
-    for i in range(num_vertices):
-        stretch_value = obj.data.tm_minimum
-        squeeze_value = obj.data.tm_minimum
+        change_colors(mesh,num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,number_of_tm_channels)
+        
+        vertex_colors_data = vertex_colors_data.reshape(len(mesh.polygons)*16)
+                        
+        mesh.vertex_colors['tm_tension'].data.foreach_set('color',vertex_colors_data)
 
-        if weights[i] >= 0:
-            # positive: stretched
-            stretch_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, weights[i]))
-        else:
-            # negative: squeezed
-            # invert weights to keep only positive values
-            squeeze_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, -weights[i]))
+def read_vertex_color_data(mesh):
+    vertex_colors = np.zeros(len(mesh.polygons)*16, dtype='float32')
+    mesh.vertex_colors['tm_tension'].data.foreach_get('color',vertex_colors)
+    return (vertex_colors.reshape(len(mesh.polygons)*4,4))
+    
+def read_polygon_vertices(mesh):
+        verts = np.zeros(len(mesh.polygons)*4, dtype='int32')
+        mesh.polygons.foreach_get('vertices',verts)
+        return(verts.reshape(len(mesh.polygons),4))
+        
+def read_vertices(mesh):
+    verts = np.zeros((len(mesh.vertices)*3), dtype='float32')
+    mesh.vertices.foreach_get("co", verts)
+    return (verts.reshape(len(mesh.vertices), 3))
 
-        if obj.data.tm_enable_vertex_groups:
-            add_index = [i]
-            group_squeeze.add(add_index, squeeze_value, "REPLACE")
-            group_stretch.add(add_index, stretch_value, "REPLACE")
+def read_edges(mesh):
+    edges = np.zeros((len(mesh.edges)*2), dtype='int32')
+    mesh.edges.foreach_get("vertices", edges)
+    return (edges.reshape(len(mesh.edges), 2))
+    
+@jit()
+def change_colors(mesh,num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,num_of_channels):
+    for poly_idx in range(num_polygons):            
+        for loop_vertex_idx, loop_idx in enumerate(loop_indices[poly_idx,:]):
+            vertex_idx = vertex_idxs[poly_idx,loop_vertex_idx]                    
+            vertex_colors_data[loop_idx,:] = [vertex_colors[vertex_idx * 2],
+                                  vertex_colors[vertex_idx * 2 + 1], 0, 1]
 
-        if obj.data.tm_enable_vertex_colors:
-            # red
-            vertex_colors[i * number_of_tm_channels] = stretch_value
-            # green
-            vertex_colors[i * number_of_tm_channels + 1] = squeeze_value
+@njit()
+def get_weights(wg,edges,deform_factor,num_vertices):
+    for i in range(len(deform_factor)):
+        for j in edges[i,:]:
+            wg[j] -= deform_factor[i]
+        
+@njit()
+def get_colors(vertex_colors,num_vertices,channels,stretch,squeeze):        
+        for i in range(num_vertices):
+            vertex_colors[i * channels] = stretch[i]
+            vertex_colors[i * channels + 1] = squeeze[i]
 
-    # store the calculated vertex colors if the feature is active
-    if obj.data.tm_enable_vertex_colors:
-        colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
-        # this is heavy, but vertex colors are stored by vertex loop
-        # and there is no simpler way to do it (it would seem)
-        for poly_idx in range(len(obj.data.polygons)):
-            polygon = obj.data.polygons[poly_idx]
-            for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
-                vertex_color = colors_tension.data[loop_idx]
-                vertex_idx = polygon.vertices[loop_vertex_idx]
-                # replace the color by a 4D vector, using 0 for blue and 1 for alpha
-                vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
-                                      vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
+@njit()
+def calc_values(stretch_values,squeeze_values,num_vertices,weights,min_val,max_val):        
+        for i in range(num_vertices):            
+            if weights[i] >= 0:
+                stretch_values[i] = max(min_val, min(
+                        max_val, weights[i]))
+                squeeze_values[i] = min_val
+            else:
+                squeeze_values[i] = max(min_val, min(
+                        max_val, -weights[i]))
+                stretch_values[i] = min_val
+
 
 
 def tm_update_handler(scene):
@@ -240,7 +279,7 @@ class TmUpdateSelected(bpy.types.Operator):
         return {"FINISHED"}
 
     def invoke(self, context, event):
-        return self.execute(context)
+        return self.execute(context)  
 
 
 class TmPanel(bpy.types.Panel):
@@ -279,14 +318,11 @@ class TmPanel(bpy.types.Panel):
         '''
         # TODO: finish implementing interface for choosing modifiers
         flow.separator()
-
         row2 = flow.column()
         row2.enabled = context.object.data.tm_active
         row2.label(text="Modifiers to use when computing tension")
         list = row2.box()
-
         modifiers = context.object.modifiers
-
         for i in range(len(modifiers)):
             row = list.row()
             row.prop(modifiers[i], "use_for_tension", text=modifiers[i].name)
