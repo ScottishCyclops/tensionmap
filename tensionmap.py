@@ -119,6 +119,9 @@ def tm_update(obj, context):
 
     # this converts the object to a mesh
     # as it is currently visible in the viewport
+    if obj.data.shape_keys is not None: 
+        for key in obj.data.shape_keys.key_blocks:
+            key.value = 0
     depsgraph = context.evaluated_depsgraph_get()
     object_eval = obj.evaluated_get(depsgraph)
     deformed_mesh = object_eval.to_mesh()
@@ -196,6 +199,9 @@ def tm_update(obj, context):
                 # replace the color by a 4D vector, using 0 for blue and 1 for alpha
                 vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
                                       vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
+    if obj.data.shape_keys is not None:            
+        for key in obj.data.shape_keys.key_blocks:
+            key.value = 1
 
 
 def tm_update_handler(scene):
