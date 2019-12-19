@@ -1,5 +1,29 @@
 # Tension Map Script
 
+## EXPERIMENTAL NUMPY/NUMBA BRANCH
+
+Numpy and Numba are both required when running this branch.
+It provides far greater performance, but hasen't been fully tested yet.
+
+The non-numba version will stay available so that users don't need to install additional software to use the add-on.
+
+To use this add-on, you will need to install numba (see below). Numpy is included with Blender 2.81.
+
+### Windows
+
+```powershell
+cd 'C:\Program Files\Blender Foundation\Blender 2.81\2.81\python\bin'
+.\python.exe -m pip install numba
+```
+
+### Unix/Linux
+
+```bash
+python -m pip install numba
+```
+
+## Description
+
 This is a blender add-on which give you stretch and squeeze information for any mesh object.
 
 This add-on has been created by Jean-Francois Gallant aka [Pyroevil](https://pyroevil.com/) and his version is available to download at [this link](https://pyroevil.com/tensionmap-download/).
