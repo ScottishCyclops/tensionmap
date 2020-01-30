@@ -17,7 +17,7 @@
 
 import bpy
 import numpy as np
-from numba import jit,njit
+from numba import njit
 
 bl_info = {
     "name":        "Tension Map Script",
@@ -177,7 +177,7 @@ def tm_update(obj, context):
         
         loop_indices = np.arange(num_polygons*4).reshape(num_polygons,4)
 
-        change_colors(mesh,num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,number_of_tm_channels)
+        change_colors(num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,number_of_tm_channels)
         
         vertex_colors_data = vertex_colors_data.reshape(len(mesh.polygons)*16)
                         
@@ -203,13 +203,13 @@ def read_edges(mesh):
     mesh.edges.foreach_get("vertices", edges)
     return (edges.reshape(len(mesh.edges), 2))
     
-@jit()
-def change_colors(mesh,num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,num_of_channels):
+@njit()
+def change_colors(num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,num_of_channels):
     for poly_idx in range(num_polygons):            
         for loop_vertex_idx, loop_idx in enumerate(loop_indices[poly_idx,:]):
             vertex_idx = vertex_idxs[poly_idx,loop_vertex_idx]                    
-            vertex_colors_data[loop_idx,:] = [vertex_colors[vertex_idx * 2],
-                                  vertex_colors[vertex_idx * 2 + 1], 0, 1]
+            vertex_colors_data[loop_idx,:] = np.array([vertex_colors[vertex_idx * 2],
+                                  vertex_colors[vertex_idx * 2 + 1], 0, 1])
 
 @njit()
 def get_weights(wg,edges,deform_factor,num_vertices):
