@@ -59,6 +59,10 @@ If you now select any Object of type *MESH* and go into the *Properties* panel, 
 
 Enable it.
 
+Best performance is achieved when your model contains only quads or only tris. For quad polygons model check 'Quads mode' for tris uncheck. 
+
+If your object is build from quads and tris check 'dual mode'(slower).
+
 Tension Map has two modes of operation that can be enabled or disabled separatly to improve playback performance depending on your needs.
 
 If you check *Enable Vertex Groups*, two new groups should be added to your *Vertex Groups*: `tm_squeeze` and `tm_stretch`.<br />
