@@ -162,7 +162,7 @@ def tm_update(obj, context):
             group_stretch.add([i], stretch[i], "REPLACE") 
                
     if obj.data.tm_enable_vertex_colors:
-        if obj.data.tm_dual:
+        if obj.data.tm_mesh_type == 'Mixed':
             vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
     
             for i in range(num_vertices):
@@ -189,7 +189,7 @@ def tm_update(obj, context):
         else:
             if 'tm_tension' not in obj.data.vertex_colors:
                 obj.data.vertex_colors.new(name='tm_tension')
-            if obj.data.tm_quads:
+            if obj.data.tm_mesh_type == 'Quads':
                 poly_idx = 4
             else:
                 poly_idx = 3
@@ -340,10 +340,7 @@ class TmPanel(bpy.types.Panel):
                   text="Enable Vertex Groups")
         row1.prop(context.object.data, "tm_enable_vertex_colors",
                   text="Enable Vertex Colors")
-        row1.prop(context.object.data, "tm_quads",
-                  text="Quads mode")
-        row1.prop(context.object.data, "tm_dual",
-                  text="Dual mode")
+        row1.prop(context.object.data, "tm_mesh_type", text="Mesh type")
         row1.prop(context.object.data, "tm_multiply", text="Multiplier")
         row1.prop(context.object.data, "tm_minimum", text="Minimum")
         row1.prop(context.object.data, "tm_maximum", text="Maximum")
@@ -403,16 +400,14 @@ def add_props():
         description="Whether to enable vertex colors",
         default=False,
         update=tm_update_selected)
-    bpy.types.Mesh.tm_quads = bpy.props.BoolProperty(
-        name="tm_quads",
-        description="Check quads, uncheck tris",
-        default=True,
-        update=tm_update_selected)
-    bpy.types.Mesh.tm_dual = bpy.props.BoolProperty(
-        name="tm_dual",
-        description="Select if mesh contains tris and quads",
-        default=False,
-        update=tm_update_selected)
+    bpy.types.Mesh.tm_mesh_type = bpy.props.EnumProperty(
+        name="tm_mesh_type",
+        items=(
+               ("Quads", "Quads only", "Select if mesh is build from quads"),
+               ("Tris", "Triangles only", "Select if mesh is build from triangles"),
+               ("Mixed", "Mixed", "Select if mesh is build from different types of polygons (slower)")
+            ),
+        )
 
 
 def remove_props():
@@ -424,8 +419,7 @@ def remove_props():
     del bpy.types.Mesh.tm_multiply
     del bpy.types.Mesh.tm_minimum
     del bpy.types.Mesh.tm_maximum
-    del bpy.types.Mesh.tm_quads
-    del bpy.types.Mesh.tm_dual
+    del bpy.types.Mesh.tm_mesh_type
     del bpy.types.Mesh.tm_enable_vertex_groups
     del bpy.types.Mesh.tm_enable_vertex_colors
 
