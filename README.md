@@ -59,9 +59,9 @@ If you now select any Object of type *MESH* and go into the *Properties* panel, 
 
 Enable it.
 
-Best performance is achieved when your model contains only quads or only tris. For quad polygons model check 'Quads mode' for tris uncheck. 
+Best performance is achieved when your model contains only quads or only triangles. For quad polygons model, in mesh type menu select 'Quads only', for triangles only model select 'Triangles only'.
 
-If your object is build from quads and tris check 'dual mode'(slower).
+If your object is build from different types of polygons select 'Mixed'(slower).
 
 Tension Map has two modes of operation that can be enabled or disabled separatly to improve playback performance depending on your needs.
 
