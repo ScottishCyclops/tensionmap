@@ -162,36 +162,65 @@ def tm_update(obj, context):
             group_stretch.add([i], stretch[i], "REPLACE") 
                
     if obj.data.tm_enable_vertex_colors:
-        if 'tm_tension' not in obj.data.vertex_colors:
-            obj.data.vertex_colors.new(name='tm_tension')
-        
-        vertex_colors = np.zeros(num_vertices*number_of_tm_channels,dtype='float32')
-        
-        get_colors(vertex_colors,num_vertices,number_of_tm_channels,stretch,squeeze)
-            
-        vertex_colors_data = read_vertex_color_data(mesh)
-        
-        vertex_idxs = read_polygon_vertices(mesh)
-        
-        num_polygons = len(mesh.polygons)
-        
-        loop_indices = np.arange(num_polygons*4).reshape(num_polygons,4)
-
-        change_colors(num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,number_of_tm_channels)
-        
-        vertex_colors_data = vertex_colors_data.reshape(len(mesh.polygons)*16)
-                        
-        mesh.vertex_colors['tm_tension'].data.foreach_set('color',vertex_colors_data)
-
-def read_vertex_color_data(mesh):
-    vertex_colors = np.zeros(len(mesh.polygons)*16, dtype='float32')
-    mesh.vertex_colors['tm_tension'].data.foreach_get('color',vertex_colors)
-    return (vertex_colors.reshape(len(mesh.polygons)*4,4))
+        if obj.data.tm_mesh_type == 'Mixed':
+            vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
     
-def read_polygon_vertices(mesh):
-        verts = np.zeros(len(mesh.polygons)*4, dtype='int32')
+            for i in range(num_vertices):
+                # red
+                vertex_colors[i * number_of_tm_channels] = stretch[i]
+                # green
+                vertex_colors[i * number_of_tm_channels + 1] = squeeze[i]
+        
+            # store the calculated vertex colors if the feature is active
+        
+            if obj.data.tm_enable_vertex_colors:
+                colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
+                # this is heavy, but vertex colors are stored by vertex loop
+                # and there is no simpler way to do it (it would seem)
+                for poly_idx in range(len(obj.data.polygons)):
+                    polygon = obj.data.polygons[poly_idx]
+                    for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
+                        vertex_color = colors_tension.data[loop_idx]
+                        vertex_idx = polygon.vertices[loop_vertex_idx]
+                        # replace the color by a 4D vector, using 0 for blue and 1 for alpha
+                        vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
+                                              vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
+        
+        else:
+            if 'tm_tension' not in obj.data.vertex_colors:
+                obj.data.vertex_colors.new(name='tm_tension')
+            if obj.data.tm_mesh_type == 'Quads':
+                poly_idx = 4
+            else:
+                poly_idx = 3
+
+            vertex_colors = np.zeros(num_vertices*number_of_tm_channels,dtype='float32')
+
+            get_colors(vertex_colors,num_vertices,number_of_tm_channels,stretch,squeeze)
+
+            vertex_colors_data = read_vertex_color_data(mesh,poly_idx)
+
+            vertex_idxs = read_polygon_vertices(mesh,poly_idx)
+
+            num_polygons = len(mesh.polygons)
+
+            loop_indices = np.arange(num_polygons*poly_idx).reshape(num_polygons,poly_idx)
+
+            change_colors(num_polygons,loop_indices,vertex_colors_data,vertex_idxs,vertex_colors,number_of_tm_channels)
+
+            vertex_colors_data = vertex_colors_data.reshape(len(mesh.polygons)*poly_idx*4)
+
+            mesh.vertex_colors['tm_tension'].data.foreach_set('color',vertex_colors_data)
+
+def read_vertex_color_data(mesh,poly_idx):
+    vertex_colors = np.zeros(len(mesh.polygons)*poly_idx*4, dtype='float32')
+    mesh.vertex_colors['tm_tension'].data.foreach_get('color',vertex_colors)
+    return (vertex_colors.reshape(len(mesh.polygons)*poly_idx,4))
+    
+def read_polygon_vertices(mesh,poly_idx):
+        verts = np.zeros(len(mesh.polygons)*poly_idx, dtype='int32')
         mesh.polygons.foreach_get('vertices',verts)
-        return(verts.reshape(len(mesh.polygons),4))
+        return(verts.reshape(len(mesh.polygons),poly_idx))
         
 def read_vertices(mesh):
     verts = np.zeros((len(mesh.vertices)*3), dtype='float32')
@@ -311,6 +340,7 @@ class TmPanel(bpy.types.Panel):
                   text="Enable Vertex Groups")
         row1.prop(context.object.data, "tm_enable_vertex_colors",
                   text="Enable Vertex Colors")
+        row1.prop(context.object.data, "tm_mesh_type", text="Mesh type")
         row1.prop(context.object.data, "tm_multiply", text="Multiplier")
         row1.prop(context.object.data, "tm_minimum", text="Minimum")
         row1.prop(context.object.data, "tm_maximum", text="Maximum")
@@ -370,6 +400,14 @@ def add_props():
         description="Whether to enable vertex colors",
         default=False,
         update=tm_update_selected)
+    bpy.types.Mesh.tm_mesh_type = bpy.props.EnumProperty(
+        name="tm_mesh_type",
+        items=(
+               ("Quads", "Quads only", "Select if mesh is build from quads"),
+               ("Tris", "Triangles only", "Select if mesh is build from triangles"),
+               ("Mixed", "Mixed", "Select if mesh is build from different types of polygons (slower)")
+            ),
+        )
 
 
 def remove_props():
@@ -381,6 +419,7 @@ def remove_props():
     del bpy.types.Mesh.tm_multiply
     del bpy.types.Mesh.tm_minimum
     del bpy.types.Mesh.tm_maximum
+    del bpy.types.Mesh.tm_mesh_type
     del bpy.types.Mesh.tm_enable_vertex_groups
     del bpy.types.Mesh.tm_enable_vertex_colors
 
