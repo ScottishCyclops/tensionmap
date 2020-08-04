@@ -1,3 +1,15 @@
+
+
+***You should use this instead :***
+
+https://blenderartists.org/t/revised-mesh-tension-add-on/1239091
+
+***Explanation video:***
+
+https://www.youtube.com/watch?v=QfbXeP8LgEg
+
+***Original README***
+
 # Tension Map Script
 
 This is a blender add-on which give you stretch and squeeze information for any mesh object.
