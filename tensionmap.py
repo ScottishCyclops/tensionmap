@@ -16,11 +16,13 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
+import bmesh
+from dataclasses import dataclass
 
 bl_info = {
     "name":        "Tension Map Script",
     "author":      "Scott Winkelmann <scottlandart@gmail.com>, Jean-Francois Gallant (PyroEvil)",
-    "version":     (2, 2, 0),
+    "version":     (2, 3, 0),
     "blender":     (2, 80, 72),
     "location":    "Properties Panel > Data Tab",
     "description": "This add-on adds stretch and squeeze information to desired meshes",
@@ -30,8 +32,9 @@ bl_info = {
     "category":    "Object"
 }
 
+geometry_cache = dict()
 last_processed_frame = None
-number_of_tm_channels = 2
+number_of_color_channels = 4
 # list of modifiers that we will keep to compute the deformation
 # TODO: update based on list in docs
 # https://docs.blender.org/api/blender2.8/bpy.types.Modifier.html#bpy.types.Modifier.type
@@ -42,6 +45,58 @@ kept_modifiers = ["ARMATURE", "MESH_CACHE", "CAST", "CURVE", "HOOK",
                   "SOFT_BODY"]
 
 tm_update_modes = ["OBJECT", "WEIGHT_PAINT", "VERTEX_PAINT"]
+
+
+@dataclass
+class GeometryData:
+    original_edge_lengths: list
+    vertex_color_index_mapping: dict
+
+
+def calculate_original_edge_lengths(obj):
+    """
+    Calculates the edge length of an object, without modifiers
+    :param obj: the object to operate on
+    :return: returns a list of edge lengths
+    """
+    number_of_edges = len(obj.data.edges)
+    edge_lengths = [0] * number_of_edges
+    bmesh_orig = bmesh.new()
+    bmesh_orig.from_mesh(obj.data)
+    bmesh_orig.edges.ensure_lookup_table()
+    for i in range(number_of_edges):
+        edge_lengths[i] = bmesh_orig.edges[i].calc_length()
+    return edge_lengths
+
+
+def calculate_vertex_color_index_mapping(obj):
+    """
+    Calculates an dict for mapping regular vertex indices to loop-based vertex indices
+    :param obj: the object to operate on
+    :return: returns the mapping dict
+    """
+    index_mapping = dict()
+    index = 0
+    for polygon in obj.data.polygons:
+        for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
+            vertex_idx = polygon.vertices[loop_vertex_idx]
+            index_mapping[index] = vertex_idx
+            index = index + 1
+    return index_mapping
+
+
+def update_geometry_cache_for_object(obj):
+    """
+    Updates the geometry cache for an object by filling it with new values or deleting it
+    :param obj: the object to operate on
+    :return: nothing
+    """
+    if obj.data.tm_enable_geometry_cache:
+        geometry_cache[obj] = GeometryData(calculate_original_edge_lengths(obj),
+                                           calculate_vertex_color_index_mapping(obj))
+    else:
+        if obj in geometry_cache:
+            del geometry_cache[obj]
 
 
 def get_or_create_vertex_group(obj, group_name):
@@ -130,30 +185,47 @@ def tm_update(obj, context):
     # array to store new weight for each vertices
     weights = [0.0] * num_vertices
 
+    # referencing the cache data
+    # it would be simpler to just generate the needed GeometryData for any non-cached object here,
+    # but then we would go through the edge-loop twice, when calculating the edge lengths
+    if obj.data.tm_enable_geometry_cache:
+        if obj not in geometry_cache:
+            update_geometry_cache_for_object(obj)
+        geometry_data = geometry_cache[obj]
+    else:
+        original_bmesh = bmesh.new()
+        original_bmesh.from_mesh(obj.data)
+        original_bmesh.edges.ensure_lookup_table()
+    deformed_bmesh = bmesh.new()
+    deformed_bmesh.from_mesh(deformed_mesh)
+    deformed_bmesh.edges.ensure_lookup_table()
+    num_edges = len(obj.data.edges)
+    
     # calculate the new weights
-    for i in range(len(obj.data.edges)):
-        edge = obj.data.edges[i]
-        first_vertex = edge.vertices[0]
-        second_vertex = edge.vertices[1]
-
-        original_edge_length = (obj.data.vertices[first_vertex].co -
-                                obj.data.vertices[second_vertex].co).length
-        deformed_edge_length = (
-            deformed_mesh.vertices[first_vertex].co - deformed_mesh.vertices[second_vertex].co).length
-
-        deformation_factor = (original_edge_length -
+    for i in range(num_edges):
+        if obj.data.tm_enable_geometry_cache:
+            original_edge_length = geometry_data.original_edge_lengths[i]
+        else:
+            original_edge_length = original_bmesh.edges[i].calc_length()
+        deformed_edge_length = deformed_bmesh.edges[i].calc_length()
+        deformation_factor = (original_edge_length - 
                               deformed_edge_length) * obj.data.tm_multiply
+        first_vertex, second_vertex = deformed_bmesh.edges[i].verts
 
         # store the weights by subtracting to overlay all the factors for each vertex
-        weights[first_vertex] -= deformation_factor
-        weights[second_vertex] -= deformation_factor
+        weights[first_vertex.index] -= deformation_factor
+        weights[second_vertex.index] -= deformation_factor
+
 
     # delete the temporary deformed mesh
     object_eval.to_mesh_clear()
 
     # create vertex color list for faster access only if vertex color is activated
     if obj.data.tm_enable_vertex_colors:
-        vertex_colors = [0.0] * (number_of_tm_channels * num_vertices)
+        vertex_colors = [[0.0] * number_of_color_channels] * num_vertices
+
+    # lambda for clamping between min and max
+    clamp = lambda value, lower, upper: lower if value < lower else upper if value > upper else value
 
     # calculate the new values
     # store them in the vertex_colors array if the feature is active
@@ -164,13 +236,11 @@ def tm_update(obj, context):
 
         if weights[i] >= 0:
             # positive: stretched
-            stretch_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, weights[i]))
+            stretch_value = clamp(weights[i], obj.data.tm_minimum, obj.data.tm_maximum)
         else:
             # negative: squeezed
             # invert weights to keep only positive values
-            squeeze_value = max(obj.data.tm_minimum, min(
-                obj.data.tm_maximum, -weights[i]))
+            squeeze_value = clamp(-weights[i], obj.data.tm_minimum, obj.data.tm_maximum)
 
         if obj.data.tm_enable_vertex_groups:
             add_index = [i]
@@ -178,24 +248,19 @@ def tm_update(obj, context):
             group_stretch.add(add_index, stretch_value, "REPLACE")
 
         if obj.data.tm_enable_vertex_colors:
-            # red
-            vertex_colors[i * number_of_tm_channels] = stretch_value
-            # green
-            vertex_colors[i * number_of_tm_channels + 1] = squeeze_value
+            # red, green, blue, alpha
+            vertex_colors[i] = (stretch_value, squeeze_value, 0.0, 1.0)
 
+    if obj.data.tm_enable_geometry_cache:
+        vertex_color_index_mapping = geometry_data.vertex_color_index_mapping
+    else:
+        vertex_color_index_mapping = calculate_vertex_color_index_mapping(obj)
     # store the calculated vertex colors if the feature is active
     if obj.data.tm_enable_vertex_colors:
-        colors_tension = get_or_create_vertex_colors(obj, "tm_tension")
-        # this is heavy, but vertex colors are stored by vertex loop
-        # and there is no simpler way to do it (it would seem)
-        for poly_idx in range(len(obj.data.polygons)):
-            polygon = obj.data.polygons[poly_idx]
-            for loop_vertex_idx, loop_idx in enumerate(polygon.loop_indices):
-                vertex_color = colors_tension.data[loop_idx]
-                vertex_idx = polygon.vertices[loop_vertex_idx]
-                # replace the color by a 4D vector, using 0 for blue and 1 for alpha
-                vertex_color.color = (vertex_colors[vertex_idx * number_of_tm_channels],
-                                      vertex_colors[vertex_idx * number_of_tm_channels + 1], 0, 1)
+        colors_tension_data = get_or_create_vertex_colors(obj, "tm_tension").data
+        tension_color_size = len(colors_tension_data)
+        for i in range(tension_color_size):
+            colors_tension_data[i].color = vertex_colors[vertex_color_index_mapping[i]]
 
 
 def tm_update_handler(scene):
@@ -227,6 +292,17 @@ def tm_update_selected(self, context):
     tm_update(context.object, context)
 
 
+def tm_update_geometry_cache(self, context):
+    """
+    Updates the geometry cache for the selected object, then updates the tension map
+    :param context: the context in which the selected object is
+    :return: nothing
+    """
+    update_geometry_cache_for_object(context.object)
+
+    tm_update(context.object, context)
+
+
 class TmUpdateSelected(bpy.types.Operator):
     """Update tension map for selected object"""
 
@@ -237,6 +313,22 @@ class TmUpdateSelected(bpy.types.Operator):
 
     def execute(self, context):
         tm_update_selected(self, context)
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        return self.execute(context)
+
+
+class TmUpdateGeometryCache(bpy.types.Operator):
+    """Update geometry cache for selected object. \nHas to be done manually when the object changes."""
+
+    # this operator is simply a wrapper for the update_geometry_cache function
+    bl_label = "Update cache"
+    bl_idname = "tm.update_geometry_cache"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        tm_update_geometry_cache(self, context)
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -263,27 +355,33 @@ class TmPanel(bpy.types.Panel):
         if context.object.type != "MESH":
             return
 
-        flow = self.layout.column()
+        obj = context.object.data
 
-        row1 = flow.column()
-        row1.active = context.object.data.tm_active
-        row1.operator("tm.update_selected")
-        row1.prop(context.object.data, "tm_enable_vertex_groups",
-                  text="Enable Vertex Groups")
-        row1.prop(context.object.data, "tm_enable_vertex_colors",
-                  text="Enable Vertex Colors")
-        row1.prop(context.object.data, "tm_multiply", text="Multiplier")
-        row1.prop(context.object.data, "tm_minimum", text="Minimum")
-        row1.prop(context.object.data, "tm_maximum", text="Maximum")
+        col1 = self.layout.column()
+        col1.active = obj.tm_active
+        col1.operator("tm.update_selected", icon="FILE_REFRESH")
+        row1 = col1.row()
+        row1Col1 = row1.column()
+        row1Col2 = row1.column()
+        row1Col1.prop(obj, "tm_enable_geometry_cache", toggle=True,
+                      icon='CHECKBOX_HLT' if obj.tm_enable_geometry_cache else 'CHECKBOX_DEHLT', text="Geometry Cache")
+        row1Col2.operator("tm.update_geometry_cache", icon="FILE_REFRESH")
+        row1Col2.active = obj.tm_enable_geometry_cache
+
+        col1.prop(obj, "tm_enable_vertex_groups")
+        col1.prop(obj, "tm_enable_vertex_colors")
+        col1.prop(obj, "tm_multiply")
+        col1.prop(obj, "tm_minimum")
+        col1.prop(obj, "tm_maximum")
 
         '''
         # TODO: finish implementing interface for choosing modifiers
         flow.separator()
 
-        row2 = flow.column()
-        row2.enabled = context.object.data.tm_active
-        row2.label(text="Modifiers to use when computing tension")
-        list = row2.box()
+        col2 = flow.column()
+        col2.enabled = context.object.data.tm_active
+        col2.label(text="Modifiers to use when computing tension")
+        list = col2.box()
 
         modifiers = context.object.modifiers
 
@@ -304,36 +402,42 @@ def add_props():
         default=False,
         update=tm_update_selected)
     bpy.types.Mesh.tm_multiply = bpy.props.FloatProperty(
-        name="tm_multiply",
+        name="Multiplier",
         description="Tension map intensity multiplier",
         min=0.0,
         max=9999.0,
         default=1.0,
         update=tm_update_selected)
     bpy.types.Mesh.tm_minimum = bpy.props.FloatProperty(
-        name="tm_minimum",
+        name="Minimum",
         description="Tension map minimum value",
         min=0.0,
         max=1.0,
         default=0.0,
         update=tm_update_selected)
     bpy.types.Mesh.tm_maximum = bpy.props.FloatProperty(
-        name="tm_maximum",
+        name="Maximum",
         description="Tension map maximum value",
         min=0.0,
         max=1.0,
         default=1.0,
         update=tm_update_selected)
     bpy.types.Mesh.tm_enable_vertex_groups = bpy.props.BoolProperty(
-        name="tm_enable_vertex_groups",
+        name="Enable Vertex Group Output",
         description="Whether to enable vertex groups",
         default=False,
         update=tm_update_selected)
     bpy.types.Mesh.tm_enable_vertex_colors = bpy.props.BoolProperty(
-        name="tm_enable_vertex_colors",
+        name="Enable Vertex Color Output",
         description="Whether to enable vertex colors",
         default=False,
         update=tm_update_selected)
+    bpy.types.Mesh.tm_enable_geometry_cache = bpy.props.BoolProperty(
+        name="Enable Geometry Cache",
+        description="Improve realtime performance by pre-calculating some geometry data.\n"
+                    "An update to the mesh will require a manual cache update",
+        default=False,
+        update=tm_update_geometry_cache)
 
 
 def remove_props():
@@ -347,6 +451,7 @@ def remove_props():
     del bpy.types.Mesh.tm_maximum
     del bpy.types.Mesh.tm_enable_vertex_groups
     del bpy.types.Mesh.tm_enable_vertex_colors
+    del bpy.types.Mesh.tm_enable_geometry_cache
 
 
 def add_handlers():
@@ -372,6 +477,7 @@ def register():
     :return: nothing
     """
     add_props()
+    bpy.utils.register_class(TmUpdateGeometryCache)
     bpy.utils.register_class(TmUpdateSelected)
     bpy.utils.register_class(TmPanel)
     add_handlers()
@@ -385,6 +491,7 @@ def unregister():
     remove_handlers()
     bpy.utils.unregister_class(TmPanel)
     bpy.utils.unregister_class(TmUpdateSelected)
+    bpy.utils.unregister_class(TmUpdateGeometryCache)
     remove_props()
 
 
